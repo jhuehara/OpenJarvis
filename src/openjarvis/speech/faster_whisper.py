@@ -116,7 +116,12 @@ class FasterWhisperBackend(SpeechBackend):
                 with tmp:
                     tmp.write(audio)
 
-                kwargs = {}
+                # vad_filter drops non-speech stretches before decoding and
+                # condition_on_previous_text=False stops repetition loops:
+                # without them, silence/noise-heavy clips (mic pre-roll, music
+                # in the room) can send Whisper into minutes-long temperature
+                # fallback retries.
+                kwargs = {"vad_filter": True, "condition_on_previous_text": False}
                 if language:
                     kwargs["language"] = language
 

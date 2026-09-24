@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S. — Universo</title>
+<style>
+  :root {
+    --bg: #020409;
+    --glass: rgba(10, 14, 22, 0.58);
+    --glass-strong: rgba(8, 11, 18, 0.82);
+    --line: rgba(255, 170, 60, 0.22);
+    --text: #f3e6cf;
+    --muted: #9c8d74;
+    --accent: #ffb347;
+    --accent-rgb: 255, 179, 71;
+    --display: 'Rajdhani', 'Avenir Next Condensed', 'DIN Condensed', 'Arial Narrow', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* ---------- HUD ---------- */
+  .hud-top {
+    position: fixed; top: 18px; left: 22px; z-index: 5; pointer-events: none;
+    text-shadow: 0 0 12px rgba(var(--accent-rgb), .55);
+  }
+  .brand { font-weight: 700; font-size: 26px; letter-spacing: .42em; color: var(--accent); transition: color .8s; }
+  .brand small { display: block; font-size: 11px; letter-spacing: .5em; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .state-line { margin-top: 14px; display: flex; align-items: center; gap: 10px; font-size: 14px; letter-spacing: .22em; text-transform: uppercase; }
+  .state-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px 2px rgba(var(--accent-rgb), .8); animation: pulse 1.8s ease-in-out infinite; transition: background .8s, box-shadow .8s; }
+  @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+  .stats { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; line-height: 1.7; }
+  .stats b { color: var(--text); font-weight: 500; }
+
+  .legend {
+    position: fixed; left: 22px; bottom: 18px; z-index: 5;
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    display: grid; grid-template-columns: repeat(2, auto); gap: 5px 18px;
+  }
+  .legend span { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px currentColor; }
+  .legend-title { grid-column: 1 / -1; letter-spacing: .3em; font-size: 10px; margin-bottom: 2px; }
+
+  /* ---------- Chat ---------- */
+  .chat {
+    position: fixed; top: 18px; right: 18px; bottom: 18px; width: min(410px, calc(100vw - 36px));
+    z-index: 6; display: flex; flex-direction: column;
+    background: var(--glass); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 0 40px rgba(var(--accent-rgb), .08), inset 0 0 30px rgba(var(--accent-rgb), .04);
+    transition: border-color .8s, box-shadow .8s, transform .35s ease;
+  }
+  .chat-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+  .chat-head h2 { font-size: 15px; font-weight: 600; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); flex: 1; transition: color .8s; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: transparent;
+    color: var(--muted); cursor: pointer; display: grid; place-items: center; transition: all .2s;
+  }
+  .icon-btn:hover { color: var(--text); border-color: rgba(var(--accent-rgb), .5); }
+  .icon-btn.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .icon-btn svg { width: 17px; height: 17px; }
+  .messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), .25) transparent; }
+  .msg { max-width: 92%; font-size: 15.5px; line-height: 1.45; animation: rise .35s ease; overflow-wrap: anywhere; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .msg .who { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; font-weight: 600; }
+  .msg.user { align-self: flex-end; text-align: right; }
+  .msg.user .body { background: rgba(var(--accent-rgb), .12); border: 1px solid rgba(var(--accent-rgb), .25); padding: 8px 12px; border-radius: 12px 12px 3px 12px; display: inline-block; text-align: left; }
+  .msg.bot .body { border-left: 2px solid rgba(var(--accent-rgb), .6); padding: 2px 0 2px 12px; }
+  .msg.bot .body code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 4px; }
+  .msg.bot .body pre { font-family: var(--mono); font-size: 12px; background: rgba(0,0,0,.35); padding: 8px 10px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+  .msg.err .body { border-left-color: #ff5a4a; color: #ffb4a8; }
+  .phase { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .06em; margin-top: 4px; opacity: .85; }
+  .caret { display: inline-block; width: 7px; height: 15px; background: var(--accent); vertical-align: -2px; margin-left: 2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .composer { padding: 12px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: flex-end; }
+  .composer textarea {
+    flex: 1; resize: none; max-height: 140px; min-height: 42px; padding: 11px 12px; border-radius: 10px;
+    background: rgba(0,0,0,.35); border: 1px solid var(--line); color: var(--text);
+    font: 500 15.5px var(--display); outline: none; transition: border-color .2s;
+  }
+  .composer textarea:focus { border-color: rgba(var(--accent-rgb), .6); }
+  .composer textarea::placeholder { color: var(--muted); }
+  .send { width: 42px; height: 42px; }
+  .mic.rec { color: #fff; background: #d8322a; border-color: #d8322a; animation: pulse 1.2s infinite; }
+  .empty { margin: auto; text-align: center; color: var(--muted); font-size: 14px; letter-spacing: .08em; line-height: 1.6; padding: 20px; }
+  .empty b { display: block; color: var(--accent); letter-spacing: .3em; font-size: 12px; margin-bottom: 6px; }
+
+  /* ---------- Tooltip & detail ---------- */
+  .tip {
+    position: fixed; z-index: 7; pointer-events: none; padding: 6px 10px; border-radius: 8px; max-width: 280px;
+    background: var(--glass-strong); border: 1px solid var(--line); font-size: 13.5px; opacity: 0; transition: opacity .15s;
+  }
+  .tip small { display: block; font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: .12em; text-transform: uppercase; }
+  .detail {
+    position: fixed; z-index: 7; left: 22px; top: 50%; transform: translateY(-50%) translateX(-12px); width: min(330px, calc(100vw - 44px));
+    background: var(--glass-strong); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .detail.show { opacity: 1; pointer-events: auto; transform: translateY(-50%); }
+  .detail small { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: .15em; text-transform: uppercase; }
+  .detail h3 { font-size: 18px; font-weight: 600; margin: 4px 0 8px; line-height: 1.25; }
+  .detail p { font-size: 14px; color: #d8cbb4; line-height: 1.45; max-height: 38vh; overflow-y: auto; white-space: pre-wrap; }
+  .detail .meta { margin-top: 10px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .detail .close { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; }
+
+  .toggle-chat { display: none; }
+
+  /* ---------- Caixa de mídia ---------- */
+  .media {
+    position: fixed; left: 22px; bottom: 18px; z-index: 6; width: min(460px, calc(100vw - 490px));
+    display: flex; flex-direction: column; overflow: hidden;
+    background: rgba(7, 10, 16, 0.9); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 0 36px rgba(var(--accent-rgb), .14), 0 20px 50px rgba(0,0,0,.5);
+    transform-origin: bottom left; animation: media-in .45s cubic-bezier(.2,.9,.25,1.15);
+    transition: width .35s ease, border-color .8s;
+  }
+  .media[hidden] { display: none; }
+  .media.big { width: min(900px, calc(100vw - 490px)); }
+  @keyframes media-in { from { opacity: 0; transform: scale(.82) translateY(14px); filter: blur(6px); } }
+  /* cantoneiras holográficas */
+  .media::before, .media::after {
+    content: ''; position: absolute; width: 18px; height: 18px; pointer-events: none; z-index: 2;
+    border: 2px solid var(--accent); filter: drop-shadow(0 0 4px var(--accent));
+  }
+  .media::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-top-left-radius: 12px; }
+  .media::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: 12px; }
+  .media-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--line); }
+  .media-kind { flex: 1; font-family: var(--mono); font-size: 10.5px; letter-spacing: .2em; color: var(--accent); }
+  .media-actions { display: flex; gap: 6px; }
+  .media-actions .icon-btn { width: 30px; height: 30px; }
+  .media-actions .icon-btn svg { width: 15px; height: 15px; }
+  .media-stage {
+    position: relative; display: grid; place-items: center; background: #000;
+    min-height: 180px; max-height: 42vh; aspect-ratio: 16 / 10;
+  }
+  .media.big .media-stage { max-height: 72vh; }
+  .media-stage img, .media-stage video { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .media-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .media-stage.video { aspect-ratio: 16 / 9; }
+  .play-ask {
+    position: absolute; inset: auto 0 0 0; z-index: 1; display: flex; gap: 8px; justify-content: center;
+    padding: 28px 12px 14px; pointer-events: none;
+    background: linear-gradient(to top, rgba(0,0,0,.8), transparent);
+  }
+  .play-ask button {
+    pointer-events: auto; cursor: pointer; border-radius: 999px; padding: 8px 16px;
+    font: 600 13px var(--display); letter-spacing: .16em; text-transform: uppercase;
+    border: 1px solid rgba(var(--accent-rgb), .6); background: rgba(0,0,0,.55); color: var(--text);
+  }
+  .play-ask .play-yes { background: var(--accent); color: #0b0b0b; border-color: var(--accent); box-shadow: 0 0 18px rgba(var(--accent-rgb), .6); }
+  .media-stage.audio { aspect-ratio: auto; min-height: 150px; padding: 18px 16px 70px; align-content: center; gap: 12px; }
+  .media-stage.audio audio { width: 100%; height: 40px; }
+  .audio-card { display: flex; align-items: center; gap: 12px; color: var(--text); font-size: 16px; }
+  .audio-card span { font-size: 28px; color: var(--accent); text-shadow: 0 0 12px var(--accent); }
+  .media-stage.soundcloud { aspect-ratio: 16 / 7; }
+  .media-loading, .media-fail { color: var(--muted); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; text-align: center; padding: 20px; }
+  .media-loading::after { content: ''; display: block; width: 120px; height: 2px; margin: 12px auto 0; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: scan 1.2s ease-in-out infinite; }
+  @keyframes scan { 0% { transform: translateX(-60px); opacity: .2; } 50% { opacity: 1; } 100% { transform: translateX(60px); opacity: .2; } }
+  .media-caption { display: flex; align-items: baseline; gap: 10px; padding: 9px 14px 11px; font-size: 14px; line-height: 1.35; }
+  .media-caption span { flex: 1; min-width: 0; color: var(--text); }
+  .media-caption a { font-family: var(--mono); font-size: 11px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .media-caption a:hover { text-decoration: underline; }
+  body.media-open .legend { opacity: 0; pointer-events: none; }
+  .legend { transition: opacity .3s; }
+
+  /* ---------- Seletor de voz ---------- */
+  .voice-panel {
+    position: absolute; top: 62px; right: 12px; left: 12px; z-index: 3; max-height: min(460px, calc(100% - 80px));
+    display: none; flex-direction: column; gap: 10px; padding: 12px;
+    background: rgba(7, 10, 16, 0.97); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 18px 40px rgba(0,0,0,.45);
+  }
+  .voice-panel.show { display: flex; animation: rise .2s ease; }
+  .vp-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .vp-head b { font-size: 13px; letter-spacing: .25em; text-transform: uppercase; color: var(--accent); }
+  .vp-head span { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .vp-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), .25) transparent; }
+  .vp-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 9px; cursor: pointer;
+    border: 1px solid transparent; transition: background .15s, border-color .15s;
+  }
+  .vp-item:hover { background: rgba(var(--accent-rgb), .07); }
+  .vp-item[aria-checked="true"] { border-color: rgba(var(--accent-rgb), .55); background: rgba(var(--accent-rgb), .1); }
+  .vp-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; display: grid; place-items: center; }
+  .vp-item[aria-checked="true"] .vp-dot { border-color: var(--accent); }
+  .vp-item[aria-checked="true"] .vp-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .vp-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vp-name small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 400; letter-spacing: .04em; }
+  .vp-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); }
+  .vp-tag.best { color: var(--accent); border-color: rgba(var(--accent-rgb), .45); }
+  .vp-play { width: 30px; height: 30px; flex: none; }
+  .vp-play.playing { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .vp-rate { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 12.5px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .vp-rate output { font-family: var(--mono); color: var(--text); text-transform: none; }
+  .vp-rate input { grid-column: 1 / -1; accent-color: var(--accent); width: 100%; }
+  .vp-all { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .vp-all input { accent-color: var(--accent); }
+  .vp-empty { color: var(--muted); font-size: 14px; padding: 8px; }
+
+  /* ---------- Modo conversa ---------- */
+  .conversation, .talk-bar { display: none; }
+  .chat.talk .messages, .chat.talk .composer { display: none; }
+  .chat.talk .conversation { display: flex; }
+  .chat.talk .talk-bar { display: flex; }
+  .conversation {
+    flex: 1; overflow-y: auto; padding: 18px 18px 8px; flex-direction: column; gap: 14px;
+    scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), .25) transparent;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 36px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 36px);
+  }
+  .line { animation: rise .35s ease; overflow-wrap: anywhere; }
+  .line .who { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+  .line.user { color: var(--muted); font-size: 16px; line-height: 1.4; }
+  .line.user .who { color: var(--muted); }
+  .line.bot { font-size: 19px; line-height: 1.42; color: var(--text); }
+  .line.bot .who { color: var(--accent); }
+  .line.bot .said { transition: color 1.2s; }
+  .line.bot .said.now { color: #fff; text-shadow: 0 0 14px rgba(var(--accent-rgb), .55); }
+  .line.pending { opacity: .55; font-style: italic; }
+  .talk-hello { margin: auto; text-align: center; color: var(--muted); font-size: 15px; letter-spacing: .06em; line-height: 1.6; }
+  .talk-hello b { display: block; color: var(--accent); letter-spacing: .3em; font-size: 12px; margin-bottom: 6px; }
+  .talk-bar { align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .talk-orb { position: relative; width: 52px; height: 52px; flex: none; border: 0; background: none; cursor: pointer; }
+  .talk-orb .core {
+    position: absolute; inset: 14px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 18px 4px rgba(var(--accent-rgb), .7); transform: scale(calc(.8 + var(--lvl, 0) * .9)); transition: transform .08s;
+  }
+  .talk-orb .ring { position: absolute; inset: 4px; border-radius: 50%; border: 1px solid rgba(var(--accent-rgb), .6); animation: ripple 2.4s ease-out infinite; }
+  .talk-orb .ring.r2 { animation-delay: 1.2s; }
+  .talk-bar[data-phase="recording"] .ring { animation-duration: 1s; border-color: rgba(var(--accent-rgb), .95); }
+  .talk-bar[data-phase="busy"] .core { animation: pulse 1s ease-in-out infinite; }
+  @keyframes ripple { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+  .talk-status { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .talk-status b { font-size: 15px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--text); }
+  .talk-status span { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .talk-end {
+    border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 9px; padding: 8px 12px;
+    font: 600 12px var(--display); letter-spacing: .2em; text-transform: uppercase; cursor: pointer;
+  }
+  .talk-end:hover { color: var(--text); border-color: rgba(var(--accent-rgb), .5); }
+
+  @media (max-width: 760px) {
+    .chat { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; height: 52vh; }
+    .chat.collapsed { transform: translateY(calc(100% - 58px)); }
+    .toggle-chat { display: grid; }
+    .legend { display: none; }
+    .media, .media.big { left: 10px; right: 10px; bottom: auto; top: 96px; width: auto; }
+    .media-stage, .media.big .media-stage { max-height: 28vh; }
+    .hud-top { top: 12px; left: 14px; }
+    .brand { font-size: 20px; }
+    .detail { top: 90px; transform: none; }
+    .detail.show { transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .state-dot, .caret, .mic.rec, .talk-orb .ring, .talk-orb .core, .media, .media-loading::after { animation: none; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "/galaxy/assets/three/three.module.min.js",
+    "three/addons/": "/galaxy/assets/three/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="hud-top">
+  <div class="brand">J.A.R.V.I.S.<small>UNIVERSO DE CONHECIMENTO</small></div>
+  <div class="state-line"><span class="state-dot"></span><span id="stateLabel">Inicializando</span></div>
+  <div class="stats" id="stats">carregando constelações…</div>
+</div>
+
+<div class="legend" id="legend"></div>
+
+<aside class="media" id="media" aria-label="Mídia" aria-live="polite" hidden>
+  <div class="media-head">
+    <span class="media-kind" id="mediaKind">MÍDIA</span>
+    <div class="media-actions">
+      <button class="icon-btn" id="mediaPrev" aria-label="Anterior" title="Anterior">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <button class="icon-btn" id="mediaNext" aria-label="Próxima" title="Próxima">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <button class="icon-btn" id="mediaBig" aria-label="Ampliar" title="Ampliar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+      </button>
+      <button class="icon-btn" id="mediaClose" aria-label="Fechar" title="Fechar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="media-stage" id="mediaStage"></div>
+  <div class="media-caption"><span id="mediaCaption"></span><a id="mediaLink" target="_blank" rel="noopener noreferrer">abrir ↗</a></div>
+</aside>
+
+<div class="tip" id="tip"></div>
+<div class="detail" id="detail">
+  <button class="icon-btn close" id="detailClose" aria-label="Fechar">✕</button>
+  <small id="dKind"></small>
+  <h3 id="dTitle"></h3>
+  <p id="dBody"></p>
+  <div class="meta" id="dMeta"></div>
+</div>
+
+<section class="chat" id="chat">
+  <div class="chat-head">
+    <h2 id="chatTitle">Canal</h2>
+    <button class="icon-btn talk-toggle" id="talkBtn" title="Modo conversa: fale livremente, o Jarvis responde em voz" aria-label="Modo conversa" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h2"/><path d="M6 8v8"/><path d="M10 4v16"/><path d="M14 7v10"/><path d="M18 10v4"/><path d="M22 12h-2"/></svg>
+    </button>
+    <button class="icon-btn" id="ttsBtn" title="Jarvis fala as respostas" aria-label="Voz">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+    </button>
+    <button class="icon-btn" id="voiceBtn" title="Escolher a voz do Jarvis" aria-label="Escolher voz" aria-expanded="false" aria-controls="voicePanel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M18.5 6.5a4 4 0 0 1 0 5"/><path d="M21 4a8 8 0 0 1 0 10"/></svg>
+    </button>
+    <button class="icon-btn" id="clearBtn" title="Nova conversa" aria-label="Nova conversa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+    <button class="icon-btn toggle-chat" id="toggleChat" aria-label="Recolher">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+  </div>
+  <div class="voice-panel" id="voicePanel" role="dialog" aria-label="Voz do Jarvis">
+    <div class="vp-head"><b>Voz do Jarvis</b><span id="vpCount"></span></div>
+    <div class="vp-list" id="vpList" role="radiogroup" aria-label="Vozes"></div>
+    <label class="vp-rate">Velocidade <output id="vpRateOut">1.05×</output>
+      <input type="range" id="vpRate" min="0.7" max="1.5" step="0.05" value="1.05">
+    </label>
+    <label class="vp-all"><input type="checkbox" id="vpAll"> mostrar vozes de outros idiomas</label>
+  </div>
+  <div class="messages" id="messages">
+    <div class="empty" id="empty"><b>SISTEMA ONLINE</b>Converse comigo. Cada estrela é algo que eu sei —<br>as conexões mostram como tudo se relaciona.</div>
+  </div>
+  <div class="conversation" id="conversation" aria-live="polite"></div>
+  <div class="talk-bar" id="talkBar">
+    <button type="button" class="talk-orb" id="talkOrb" aria-label="Interromper">
+      <span class="ring"></span><span class="ring r2"></span><span class="core"></span>
+    </button>
+    <div class="talk-status">
+      <b id="talkStatus">Pode falar…</b>
+      <span id="talkHint">Diga “tchau, Jarvis” para encerrar</span>
+    </div>
+    <button type="button" class="talk-end" id="talkEnd">Encerrar</button>
+  </div>
+  <form class="composer" id="composer">
+    <button type="button" class="icon-btn mic" id="micBtn" title="Falar (Whisper)" aria-label="Falar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v5"/></svg>
+    </button>
+    <textarea id="input" rows="1" placeholder="Fale com o Jarvis…" autocomplete="off"></textarea>
+    <button type="submit" class="icon-btn send" id="sendBtn" aria-label="Enviar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 14-7-5 16-3-7z"/></svg>
+    </button>
+  </form>
+</section>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* =====================================================================
+   Estados / paletas — a cor do universo reflete a reação do Jarvis
+   ===================================================================== */
+const PALETTES = {
+  idle:      { deep: '#ff5a00', hot: '#ffc35a', energy: 1.00, speed: 1.0, label: 'Em espera' },
+  listening: { deep: '#ff7410', hot: '#ffd98a', energy: 1.20, speed: 1.2, label: 'Ouvindo' },
+  thinking:  { deep: '#ff9d2e', hot: '#fff1cf', energy: 1.60, speed: 2.6, label: 'Pensando' },
+  tool:      { deep: '#0061ff', hot: '#6fe9ff', energy: 1.35, speed: 1.9, label: 'Usando ferramenta' },
+  speaking:  { deep: '#ff7a00', hot: '#ffdc8c', energy: 1.35, speed: 1.5, label: 'Respondendo' },
+  error:     { deep: '#e00000', hot: '#ff4d4d', energy: 1.20, speed: 0.7, label: 'Falha' },
+  // Emoções: tons saturados e brilho contido para não estourarem no branco
+  joy:       { deep: '#e0b000', hot: '#fff04a', energy: 1.10, speed: 1.4, label: 'Alegria' },
+  affection: { deep: '#ff1464', hot: '#ff86b6', energy: 1.10, speed: 1.0, label: 'Afeto' },
+  curiosity: { deep: '#6a1cff', hot: '#b98cff', energy: 1.15, speed: 1.3, label: 'Curiosidade' },
+  sadness:   { deep: '#1238ff', hot: '#6f8dff', energy: 0.95, speed: 0.6, label: 'Tristeza' },
+  concern:   { deep: '#ff2a00', hot: '#ff7a3d', energy: 1.10, speed: 1.1, label: 'Preocupação' },
+  calm:      { deep: '#00a07e', hot: '#5dffd0', energy: 1.00, speed: 0.8, label: 'Serenidade' },
+};
+const LEGEND = ['idle', 'thinking', 'tool', 'joy', 'curiosity', 'affection', 'calm', 'sadness', 'concern', 'error'];
+
+const R = 10; // raio da esfera holográfica
+
+/* =====================================================================
+   Renderer, cena, câmera
+   ===================================================================== */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.NoToneMapping; // mantém o âmbar saturado do holograma
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#020409');
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 400);
+const isNarrow = () => innerWidth < 760;
+camera.position.set(0, 2.5, 33);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 6;
+controls.maxDistance = 120;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.25;
+controls.enablePan = false;
+
+// Desloca o centro visual para a esquerda quando o chat ocupa a direita
+function frameView() {
+  const shift = isNarrow() ? 0 : Math.min(205, innerWidth * 0.18);
+  camera.setViewOffset(innerWidth, innerHeight, shift, isNarrow() ? innerHeight * 0.16 : 0, innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  // Em telas estreitas (retrato) a esfera precisa caber na largura
+  const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const fit = R * 1.25 / (halfH * Math.min(camera.aspect, 1));
+  if (camera.position.length() < fit || isNarrow()) camera.position.setLength(Math.max(fit, isNarrow() ? 0 : 33));
+}
+frameView();
+
+/* Uniforms compartilhados por todos os materiais */
+const U = {
+  uTime:    { value: 0 },
+  uDeep:    { value: new THREE.Color(PALETTES.idle.deep) },
+  uHot:     { value: new THREE.Color(PALETTES.idle.hot) },
+  uEnergy:  { value: 1 },
+  uWaveR:   { value: 999 },
+  uWaveAmp: { value: 0 },
+  uR:       { value: R },
+  uPixel:   { value: renderer.getPixelRatio() },
+};
+
+const TINT_GLSL = /* glsl */`
+  uniform vec3 uDeep; uniform vec3 uHot;
+  vec3 tint(float b) {
+    vec3 c = mix(uDeep, uHot, clamp(b, 0.0, 1.0));
+    return mix(c, vec3(1.0, 0.95, 0.82), clamp(b - 1.3, 0.0, 1.0) * 0.5);
+  }`;
+const WAVE_GLSL = /* glsl */`
+  uniform float uWaveR; uniform float uWaveAmp; uniform float uR;
+  float wave(float r) { float d = (r - uWaveR) / (0.075 * uR); return uWaveAmp * exp(-d * d); }`;
+
+const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
+const randomUnit = () => {
+  const u = rand(-1, 1), t = rand(0, Math.PI * 2), s = Math.sqrt(1 - u * u);
+  return new THREE.Vector3(s * Math.cos(t), s * Math.sin(t), u);
+};
+
+const holo = new THREE.Group();   // a esfera toda
+scene.add(holo);
+
+/* =====================================================================
+   1. Fragmentos de dados — milhares de traços curtos na casca da esfera
+   ===================================================================== */
+function buildFragments(count) {
+  const pos = new Float32Array(count * 6);
+  const shade = new Float32Array(count * 2);
+  const phase = new Float32Array(count * 2);
+  const axes = [new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0.35, 0).normalize(),
+                new THREE.Vector3(0.2, 0.4, 1).normalize(), new THREE.Vector3(-0.7, 0.6, 0.3).normalize()];
+  const p = new THREE.Vector3(), t = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
+  for (let i = 0; i < count; i++) {
+    const dir = randomUnit();
+    const shell = Math.random();
+    // Casca externa bem densa (como no holograma), interior mais rarefeito
+    const r = shell < 0.62 ? R * rand(0.86, 1.03) : shell < 0.85 ? R * rand(0.62, 0.86) : R * rand(0.18, 0.62);
+    p.copy(dir).multiplyScalar(r);
+    const mode = Math.random();
+    if (mode < 0.72) {        // tangente "de latitude": circuitos concêntricos
+      t.crossVectors(axes[i % axes.length], dir).normalize();
+    } else if (mode < 0.86) { // radial: raios que escapam
+      t.copy(dir);
+    } else {                  // qualquer direção tangente
+      t.crossVectors(randomUnit(), dir).normalize();
+    }
+    const len = Math.random() < 0.08 ? rand(0.6, 1.4) : rand(0.05, 0.42);
+    a.copy(p).addScaledVector(t, -len / 2);
+    b.copy(p).addScaledVector(t, len / 2);
+    pos.set([a.x, a.y, a.z, b.x, b.y, b.z], i * 6);
+    const s = Math.pow(Math.random(), 2.6) * (shell < 0.62 ? 1.2 : 0.9) + 0.08;
+    shade[i * 2] = shade[i * 2 + 1] = s;
+    phase[i * 2] = phase[i * 2 + 1] = Math.random();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aShade', new THREE.BufferAttribute(shade, 1));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  const m = new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      attribute float aShade; attribute float aPhase;
+      uniform float uTime; uniform float uEnergy;
+      ${WAVE_GLSL}
+      varying float vB;
+      void main() {
+        float r = length(position);
+        float flick = 0.62 + 0.38 * sin(uTime * (1.2 + aPhase * 5.0) + aPhase * 60.0);
+        flick *= step(0.04, fract(aPhase * 13.0 + uTime * 0.05 * (0.5 + aPhase))); // piscadas raras
+        vB = aShade * flick * uEnergy + wave(r) * (0.35 + aShade);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      varying float vB;
+      void main() { gl_FragColor = vec4(tint(vB) * vB * 0.42, 1.0); }`,
+  });
+  return new THREE.LineSegments(g, m);
+}
+
+/* =====================================================================
+   2. Painéis de dados — retalhos de "texto/circuito" voltados para fora
+   ===================================================================== */
+function makeGlyphAtlas() {
+  const N = 8, S = 128, c = document.createElement('canvas');
+  c.width = c.height = N * S;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.strokeStyle = '#fff';
+  for (let i = 0; i < N * N; i++) {
+    const ox = (i % N) * S, oy = Math.floor(i / N) * S, kind = i % 4;
+    x.save(); x.translate(ox + 6, oy + 6);
+    const W = S - 12, H = S - 12;
+    if (kind === 0) {            // linhas de "texto"
+      for (let y = 4; y < H; y += rand(9, 14)) {
+        let px = rand(0, 10);
+        while (px < W - 8) { const w = rand(4, 22); x.globalAlpha = rand(.35, 1); x.fillRect(px, y, Math.min(w, W - px), rand(3, 5)); px += w + rand(3, 7); }
+      }
+    } else if (kind === 1) {     // circuito
+      x.lineWidth = 2.2;
+      for (let k = 0; k < 7; k++) {
+        x.globalAlpha = rand(.4, 1); x.beginPath(); let px = rand(0, W), py = rand(0, H); x.moveTo(px, py);
+        for (let s = 0; s < 4; s++) { if (Math.random() < .5) px = rand(0, W); else py = rand(0, H); x.lineTo(px, py); }
+        x.stroke(); x.fillRect(px - 3, py - 3, 6, 6);
+      }
+    } else if (kind === 2) {     // blocos / tabela
+      x.lineWidth = 2; x.globalAlpha = .9; x.strokeRect(2, 2, W - 4, H - 4);
+      for (let k = 0; k < 10; k++) { x.globalAlpha = rand(.25, .9); x.fillRect(rand(6, W - 30), rand(6, H - 16), rand(8, 40), rand(4, 12)); }
+    } else {                     // gráfico / onda
+      x.lineWidth = 2.5; x.globalAlpha = 1; x.beginPath();
+      for (let px = 0; px <= W; px += 4) x.lineTo(px, H / 2 + Math.sin(px * rand(.04, .12) + i) * H * .3 + rand(-5, 5));
+      x.stroke();
+      for (let px = 4; px < W; px += 10) { x.globalAlpha = .5; x.fillRect(px, H - rand(6, 30), 6, 40); }
+    }
+    x.restore();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+function buildPanels(count) {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const cell = new Float32Array(count), shade = new Float32Array(count), phase = new Float32Array(count);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { ...U, uAtlas: { value: makeGlyphAtlas() } },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      attribute float aCell; attribute float aShade; attribute float aPhase;
+      uniform float uTime; uniform float uEnergy;
+      ${WAVE_GLSL}
+      varying vec2 vUv; varying float vB;
+      void main() {
+        vec2 cell = vec2(mod(aCell, 8.0), floor(aCell / 8.0));
+        vUv = (uv + cell) / 8.0;
+        vec4 wp = instanceMatrix * vec4(position, 1.0);
+        float flick = 0.55 + 0.45 * sin(uTime * (0.7 + aPhase * 2.5) + aPhase * 30.0);
+        vB = aShade * flick * uEnergy + wave(length(wp.xyz)) * 0.8;
+        gl_Position = projectionMatrix * modelViewMatrix * wp;
+      }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      uniform sampler2D uAtlas;
+      varying vec2 vUv; varying float vB;
+      void main() {
+        float a = texture2D(uAtlas, vUv).a;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(tint(vB) * a * vB * 0.62, 1.0);
+      }`,
+  });
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 0, 1);
+  for (let i = 0; i < count; i++) {
+    const dir = randomUnit();
+    const r = R * (Math.random() < .78 ? rand(0.86, 1.03) : rand(0.4, 0.86));
+    q.setFromUnitVectors(up, dir);
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(up, rand(-0.3, 0.3) + (Math.random() < .5 ? 0 : Math.PI / 2)));
+    const w = rand(0.25, 1.1) * (r / R);
+    s.set(w, w * rand(0.3, 0.9), 1);
+    m.compose(dir.multiplyScalar(r), q, s);
+    mesh.setMatrixAt(i, m);
+    cell[i] = Math.floor(Math.random() * 64);
+    shade[i] = Math.pow(Math.random(), 2) * 0.9 + 0.12;
+    phase[i] = Math.random();
+  }
+  geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(cell, 1));
+  geo.setAttribute('aShade', new THREE.InstancedBufferAttribute(shade, 1));
+  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phase, 1));
+  return mesh;
+}
+
+/* =====================================================================
+   3. Arcos orbitais e a espiral do núcleo
+   ===================================================================== */
+function arcMaterial({ shade, dash, seed }) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...U, uShade: { value: shade }, uDash: { value: dash }, uSeed: { value: seed } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      varying vec2 vUv; varying float vR;
+      void main() { vUv = uv; vR = length(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      ${WAVE_GLSL}
+      uniform float uTime; uniform float uEnergy; uniform float uShade; uniform float uDash; uniform float uSeed;
+      varying vec2 vUv; varying float vR;
+      void main() {
+        float gap = uDash > 0.0 ? step(0.28, fract(vUv.x * uDash + uSeed)) : 1.0;
+        float run = pow(fract(vUv.x * 1.5 - uTime * 0.08 + uSeed), 10.0);        // pulso que percorre o arco
+        float ends = smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.94, vUv.x);  // pontas afinam
+        float b = (uShade * (0.75 + 0.25 * sin(uTime * 1.3 + uSeed * 20.0)) + run * 1.1) * uEnergy + wave(vR);
+        gl_FragColor = vec4(tint(b) * b * gap * ends * 0.55, 1.0);
+      }`,
+  });
+}
+
+function arcCurve(radius, start, sweep, axis, tilt = 0) {
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+  return Object.assign(new THREE.Curve(), {
+    getPoint(t, target = new THREE.Vector3()) {
+      const a = start + sweep * t;
+      target.set(Math.cos(a) * radius, Math.sin(a) * radius, Math.sin(a * 3 + tilt) * radius * 0.015);
+      return target.applyQuaternion(q);
+    },
+  });
+}
+
+function buildArcs(group) {
+  const orbits = [];
+  for (let i = 0; i < 46; i++) {
+    const rr = Math.random();
+    const radius = R * (rr < 0.7 ? rand(0.9, 1.05) : rr < 0.9 ? rand(0.66, 0.9) : rand(0.35, 0.66));
+    const sweep = rand(0.3, Math.random() < 0.15 ? 3.6 : 1.5);
+    const thick = Math.random() < 0.12 ? rand(0.045, 0.085) : rand(0.012, 0.03);
+    const curve = arcCurve(radius, rand(0, Math.PI * 2), sweep, randomUnit(), rand(0, 6));
+    const mesh = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, Math.ceil(sweep * 40), thick, 5, false),
+      arcMaterial({ shade: thick > 0.05 ? rand(0.9, 1.3) : rand(0.3, 0.8), dash: Math.random() < 0.45 ? Math.floor(rand(6, 40)) : 0, seed: Math.random() }),
+    );
+    const pivot = new THREE.Group();
+    pivot.add(mesh);
+    pivot.userData.spin = new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+    pivot.userData.speed = rand(0.02, 0.12) * (Math.random() < 0.5 ? -1 : 1);
+    group.add(pivot);
+    orbits.push(pivot);
+  }
+  return orbits;
+}
+
+function buildCore(group) {
+  // Espiral luminosa central (o "redemoinho" do holograma)
+  const spiral = Object.assign(new THREE.Curve(), {
+    getPoint(t, target = new THREE.Vector3()) {
+      const a = t * Math.PI * 3.1 + 0.6;
+      const r = R * (0.05 + 0.47 * Math.pow(t, 0.85));
+      return target.set(Math.cos(a) * r, Math.sin(a) * r * 0.92, Math.sin(t * Math.PI) * R * 0.08);
+    },
+  });
+  const core = new THREE.Group();
+  core.add(new THREE.Mesh(new THREE.TubeGeometry(spiral, 260, 0.075, 8, false), arcMaterial({ shade: 1.25, dash: 0, seed: 0.1 })));
+  core.add(new THREE.Mesh(new THREE.TubeGeometry(spiral, 260, 0.022, 5, false), arcMaterial({ shade: 0.8, dash: 90, seed: 0.5 })).translateZ(0.35).rotateZ(0.25));
+  // Grande crescente que atravessa o centro
+  const crescent = new THREE.Mesh(
+    new THREE.TubeGeometry(arcCurve(R * 0.58, 1.9, 3.9, new THREE.Vector3(0.12, 0.2, 1).normalize(), 0), 220, 0.1, 8, false),
+    arcMaterial({ shade: 1.1, dash: 0, seed: 0.7 }),
+  );
+  core.add(crescent);
+  core.rotation.set(0.25, -0.35, 0.1);
+  group.add(core);
+
+  // Brilho do núcleo — a estrela de maior brilho
+  const glowTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d'), g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.12, 'rgba(255,255,255,.85)');
+    g.addColorStop(0.35, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+  })();
+  const glowMat = (opacity) => new THREE.SpriteMaterial({ map: glowTex, color: U.uHot.value, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+  const sun = new THREE.Sprite(glowMat(0.9)); sun.scale.setScalar(2.6);
+  const halo = new THREE.Sprite(glowMat(0.05)); halo.scale.setScalar(R * 1.2);
+  const haze = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: U.uDeep.value, transparent: true, opacity: 0.035, depthWrite: false, blending: THREE.AdditiveBlending }));
+  haze.scale.setScalar(R * 3.2);
+  scene.add(sun, halo, haze);
+  return { core, sun, halo, haze };
+}
+
+/* =====================================================================
+   4. Faíscas — partículas que escapam da esfera
+   ===================================================================== */
+function buildSparks(count) {
+  const pos = new Float32Array(count * 3), phase = new Float32Array(count), speed = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const d = randomUnit().multiplyScalar(R * rand(0.75, 1.1));
+    pos.set([d.x, d.y, d.z], i * 3);
+    phase[i] = Math.random(); speed[i] = rand(0.4, 1.6);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  g.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  return new THREE.Points(g, new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      attribute float aPhase; attribute float aSpeed;
+      uniform float uTime; uniform float uEnergy; uniform float uPixel;
+      varying float vA;
+      void main() {
+        float k = fract(uTime * 0.035 * aSpeed + aPhase);
+        vec3 p = position * (1.0 + k * 0.45);
+        vA = (1.0 - k) * (0.3 + 0.5 * aSpeed / 1.6) * uEnergy;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = (1.6 + aSpeed) * uPixel * (30.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      varying float vA;
+      void main() { float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; gl_FragColor = vec4(tint(vA) * vA * (1.0 - d * 2.0), 1.0); }`,
+  }));
+}
+
+/* =====================================================================
+   5. Estrelas de conhecimento + filamentos de relação
+   ===================================================================== */
+const KIND = {
+  core:         { label: 'Núcleo',     size: 0,   white: 1.0 },
+  hub:          { label: 'Constelação', size: 3.4, white: 0.75 },
+  conversation: { label: 'Conversa',   size: 1.5, white: 0.35 },
+  memory:       { label: 'Memória',    size: 1.7, white: 0.55 },
+  fact:         { label: 'Fato',       size: 1.4, white: 0.7 },
+  entity:       { label: 'Conceito',   size: 1.6, white: 0.5 },
+  tool:         { label: 'Ferramenta', size: 1.7, white: 0.2 },
+  skill:        { label: 'Habilidade', size: 1.7, white: 0.6 },
+};
+
+const knowledge = {
+  nodes: [], byId: new Map(), edges: [],
+  points: null, lines: null, hi: null, edgeHi: null,
+};
+
+function nodeKeywords(n) {
+  return new Set(`${n.label} ${n.detail || ''}`.toLowerCase().match(/[a-zà-ÿ0-9]{4,}/g) || []);
+}
+
+// Posiciona hubs numa esfera de Fibonacci e os membros ao redor do seu hub.
+function layout(nodes, edges, previous) {
+  const hubs = nodes.filter(n => n.kind === 'hub');
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const hubDir = new Map();
+  hubs.forEach((h, i) => {
+    const y = 1 - (i + 0.5) / hubs.length * 2, rad = Math.sqrt(1 - y * y), th = golden * i + 0.7;
+    hubDir.set(h.id, new THREE.Vector3(Math.cos(th) * rad, y * 0.8, Math.sin(th) * rad).normalize());
+  });
+  const groupSize = {};
+  nodes.forEach(n => { groupSize[n.group] = (groupSize[n.group] || 0) + 1; });
+
+  for (const n of nodes) {
+    if (previous?.has(n.id)) { n.pos = previous.get(n.id).clone(); n.fixed = true; continue; }
+    if (n.kind === 'core') { n.pos = new THREE.Vector3(); n.fixed = true; continue; }
+    if (n.kind === 'hub') { n.pos = hubDir.get(n.id).clone().multiplyScalar(R * 0.42); continue; }
+    const base = hubDir.get(n.group) || randomUnit();
+    const spread = 0.35 + Math.min(0.9, Math.sqrt(groupSize[n.group] || 1) * 0.07);
+    const d = base.clone().addScaledVector(randomUnit(), spread).normalize();
+    n.pos = d.multiplyScalar(R * rand(0.5, 0.9));
+  }
+
+  // Relaxação por forças: vizinhos se atraem, estrelas próximas se repelem
+  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const free = nodes.filter(n => !n.fixed);
+  if (!free.length) return;
+  const f = nodes.map(() => new THREE.Vector3()), tmp = new THREE.Vector3();
+  for (let it = 0; it < 60; it++) {
+    f.forEach(v => v.set(0, 0, 0));
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        tmp.subVectors(nodes[i].pos, nodes[j].pos);
+        const d2 = Math.max(tmp.lengthSq(), 0.01);
+        if (d2 > 9) continue;
+        tmp.multiplyScalar(0.06 / d2);
+        f[i].add(tmp); f[j].sub(tmp);
+      }
+    }
+    for (const e of edges) {
+      if (e.kind === 'structure') continue;
+      const a = idx.get(e.source), b = idx.get(e.target);
+      tmp.subVectors(nodes[b].pos, nodes[a].pos);
+      const target = e.kind === 'member' ? R * 0.28 : R * 0.18;
+      tmp.multiplyScalar((tmp.length() - target) * 0.012 * e.weight / Math.max(tmp.length(), 0.01));
+      f[a].add(tmp); f[b].sub(tmp);
+    }
+    nodes.forEach((n, i) => {
+      if (n.fixed) return;
+      n.pos.addScaledVector(f[i], 1 - it / 70);
+      const r = n.pos.length(), [lo, hi] = n.kind === 'hub' ? [R * 0.3, R * 0.55] : [R * 0.35, R * 0.93];
+      if (r < lo || r > hi) n.pos.setLength(THREE.MathUtils.clamp(r, lo, hi));
+    });
+  }
+}
+
+function buildKnowledge(graph) {
+  const previous = knowledge.nodes.length ? new Map(knowledge.nodes.map(n => [n.id, n.pos])) : null;
+  const oldHi = new Map(knowledge.nodes.map((n, i) => [n.id, knowledge.hi?.[i] || 0]));
+  if (knowledge.points) { holo.remove(knowledge.points, knowledge.lines); knowledge.points.geometry.dispose(); knowledge.lines.geometry.dispose(); }
+
+  const nodes = graph.nodes.map(n => ({ ...n }));
+  layout(nodes, graph.edges, previous);
+  const byId = new Map(nodes.map((n, i) => [n.id, i]));
+
+  const count = nodes.length;
+  const pos = new Float32Array(count * 3), size = new Float32Array(count), white = new Float32Array(count), phase = new Float32Array(count);
+  const hi = new Float32Array(count);
+  nodes.forEach((n, i) => {
+    n.kw = nodeKeywords(n);
+    pos.set([n.pos.x, n.pos.y, n.pos.z], i * 3);
+    const k = KIND[n.kind] || KIND.memory;
+    size[i] = n.kind === 'core' ? 0 : k.size * (0.85 + Math.min(1.6, Math.sqrt(n.degree || 1) * 0.22)) * (n.kind === 'hub' ? 1 : Math.sqrt(n.weight || 1));
+    white[i] = k.white;
+    phase[i] = Math.random();
+    // Estrelas recém-nascidas entram acesas
+    hi[i] = previous && !previous.has(n.id) ? 1.6 : (oldHi.get(n.id) || 0);
+  });
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  pg.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  pg.setAttribute('aWhite', new THREE.BufferAttribute(white, 1));
+  pg.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  pg.setAttribute('aHi', new THREE.BufferAttribute(hi, 1));
+  const points = new THREE.Points(pg, new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      attribute float aSize; attribute float aWhite; attribute float aPhase; attribute float aHi;
+      uniform float uTime; uniform float uEnergy; uniform float uPixel;
+      ${WAVE_GLSL}
+      varying float vB; varying float vWhite; varying float vBig;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float tw = 0.85 + 0.15 * sin(uTime * (1.0 + aPhase * 3.0) + aPhase * 40.0);
+        vB = (0.9 * tw * uEnergy + aHi * 1.6 + wave(length(position)) * 0.8);
+        vWhite = aWhite; vBig = smoothstep(2.0, 4.0, aSize);
+        gl_PointSize = aSize * (1.0 + aHi * 0.9) * uPixel * (120.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      varying float vB; varying float vWhite; varying float vBig;
+      void main() {
+        vec2 p = gl_PointCoord * 2.0 - 1.0; float d = length(p);
+        if (d > 1.0) discard;
+        float core = exp(-d * d * 22.0);
+        float halo = exp(-d * d * 4.0) * 0.35;
+        float spikes = (exp(-abs(p.x) * 28.0) + exp(-abs(p.y) * 28.0)) * exp(-d * d * 2.2) * (0.25 + 0.5 * vBig);
+        vec3 c = mix(tint(vB), vec3(1.0, 0.98, 0.94), clamp(core * (0.4 + vWhite), 0.0, 1.0));
+        gl_FragColor = vec4(c * (core * 1.6 + halo + spikes) * vB, 1.0);
+      }`,
+  }));
+  points.frustumCulled = false;
+
+  // Filamentos: cada aresta vira um segmento com "pulsos de dados" correndo
+  const edges = graph.edges.filter(e => byId.has(e.source) && byId.has(e.target));
+  const ep = new Float32Array(edges.length * 6), et = new Float32Array(edges.length * 2), ew = new Float32Array(edges.length * 2);
+  const eh = new Float32Array(edges.length * 2), es = new Float32Array(edges.length * 2);
+  edges.forEach((e, i) => {
+    const a = nodes[byId.get(e.source)].pos, b = nodes[byId.get(e.target)].pos;
+    ep.set([a.x, a.y, a.z, b.x, b.y, b.z], i * 6);
+    et[i * 2] = 0; et[i * 2 + 1] = 1;
+    const w = e.kind === 'structure' ? 1.0 : e.kind === 'member' ? 0.32 : 0.35 + e.weight * 0.9;
+    ew[i * 2] = ew[i * 2 + 1] = w;
+    es[i * 2] = es[i * 2 + 1] = Math.random();
+  });
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+  lg.setAttribute('aT', new THREE.BufferAttribute(et, 1));
+  lg.setAttribute('aW', new THREE.BufferAttribute(ew, 1));
+  lg.setAttribute('aHi', new THREE.BufferAttribute(eh, 1));
+  lg.setAttribute('aSeed', new THREE.BufferAttribute(es, 1));
+  const lines = new THREE.LineSegments(lg, new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      attribute float aT; attribute float aW; attribute float aHi; attribute float aSeed;
+      varying float vT; varying float vW; varying float vHi; varying float vSeed;
+      void main() { vT = aT; vW = aW; vHi = aHi; vSeed = aSeed; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */`
+      ${TINT_GLSL}
+      uniform float uTime; uniform float uEnergy;
+      varying float vT; varying float vW; varying float vHi; varying float vSeed;
+      void main() {
+        float flow = pow(fract(vT * 2.0 - uTime * (0.25 + vHi * 0.6) + vSeed), 14.0);
+        float b = (0.07 + 0.2 * vW) * uEnergy * (1.0 + vHi * 5.0) + flow * (0.25 + vHi) * vW;
+        gl_FragColor = vec4(tint(0.6 + vHi) * b, 1.0);
+      }`,
+  }));
+  lines.frustumCulled = false;
+
+  holo.add(lines, points);
+  Object.assign(knowledge, { nodes, byId, edges, points, lines, hi, edgeHi: eh });
+  updateStats(graph);
+}
+
+// Acende estrelas relacionadas a um texto (lembrança ativada)
+function illuminate(text, strength = 1.4) {
+  if (!knowledge.nodes.length) return 0;
+  const words = new Set((text.toLowerCase().match(/[a-zà-ÿ0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
+  if (!words.size) return 0;
+  let lit = 0;
+  knowledge.nodes.forEach((n, i) => {
+    if (n.kind === 'core') return;
+    let hits = 0;
+    for (const w of words) if (n.kw.has(w)) hits++;
+    if (hits) { knowledge.hi[i] = Math.max(knowledge.hi[i], Math.min(2, strength * (0.6 + hits * 0.4))); lit++; }
+  });
+  return lit;
+}
+const STOP = new Set('para como mais isso esse essa este esta você voce sobre quando onde qual quais quem porque também muito pode posso fazer tenho temos está estou that this with from have what your about there which would could'.split(' '));
+
+/* =====================================================================
+   Montagem da cena + pós-processamento (bloom + lente holográfica)
+   ===================================================================== */
+const fragments = buildFragments(isNarrow() ? 9000 : 16000);
+const panels = buildPanels(isNarrow() ? 1300 : 2600);
+holo.add(fragments, panels);
+const shellA = new THREE.Group(), shellB = new THREE.Group();
+holo.add(shellA, shellB);
+const orbits = buildArcs(shellA);
+const { core: coreGroup, sun, halo, haze } = buildCore(holo);
+const sparks = buildSparks(isNarrow() ? 1400 : 2600);
+holo.add(sparks);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.45, 0.16);
+composer.addPass(bloom);
+const lens = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uTime: U.uTime, uRes: { value: new THREE.Vector2(innerWidth, innerHeight) } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes; varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 c = vUv - 0.5;
+      float ab = 0.0014 * length(c) * 2.0;               // aberração cromática leve
+      vec3 col = vec3(texture2D(tDiffuse, vUv + c * ab).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - c * ab).b);
+      col *= 0.965 + 0.035 * sin(vUv.y * uRes.y * 1.4 + uTime * 3.0);   // linhas de varredura
+      col += (hash(vUv * uRes + uTime) - 0.5) * 0.012;                  // granulação
+      col *= smoothstep(1.05, 0.25, length(c * vec2(1.1, 1.0)));        // vinheta
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+composer.addPass(lens);
+composer.addPass(new OutputPass());
+
+/* =====================================================================
+   Máquina de estados visuais
+   ===================================================================== */
+const view = {
+  state: 'idle', target: PALETTES.idle, holdUntil: 0,
+  deep: new THREE.Color(PALETTES.idle.deep), hot: new THREE.Color(PALETTES.idle.hot),
+  energy: 1, speed: 1, burst: 0, voice: 0, waves: [], nextWave: 0,
+  mood: 'idle',   // emoção declarada pelo Jarvis na resposta atual
+};
+const stateLabel = document.getElementById('stateLabel');
+const cssDeep = new THREE.Color(), cssHot = new THREE.Color();
+
+function setState(name, holdMs = 0) {
+  let p = PALETTES[name] || PALETTES.idle;
+  // Enquanto responde, o universo mantém a cor da emoção declarada
+  if (name === 'speaking' && view.mood !== 'idle') {
+    const m = PALETTES[view.mood];
+    p = { ...m, energy: m.energy * 1.12, speed: PALETTES.speaking.speed,
+          label: `${PALETTES.speaking.label} · ${m.label}` };
+  }
+  if (name === 'idle' && !holdMs) view.mood = 'idle';
+  view.state = name; view.target = p;
+  view.holdUntil = holdMs ? performance.now() + holdMs : 0;
+  stateLabel.textContent = p.label;
+  if (name === 'thinking' || name === 'tool' || name === 'error') emitWave(name === 'tool' ? 1.8 : 1.2);
+}
+function emitWave(amp = 1) { view.waves.push({ r: 0, amp }); }
+
+function updateView(dt, now) {
+  if (view.holdUntil && now > view.holdUntil) {
+    if (speaker.active) view.holdUntil = now + 1000;   // ainda falando: não volta a "Em espera"
+    else { view.holdUntil = 0; setState('idle'); }
+  }
+  const p = view.target, k = 1 - Math.exp(-dt * 2.4);
+  view.deep.lerp(new THREE.Color(p.deep), k);
+  view.hot.lerp(new THREE.Color(p.hot), k);
+  U.uDeep.value.copy(view.deep); U.uHot.value.copy(view.hot);
+  view.burst *= Math.exp(-dt * 3.5);
+  view.energy += (p.energy + view.burst * 0.45 + view.voice * 0.8 - view.energy) * k;
+  view.speed += (p.speed - view.speed) * k;
+  U.uEnergy.value = view.energy;
+
+  // Ondas concêntricas partindo do núcleo
+  if (view.state === 'thinking' && now > view.nextWave) { emitWave(1.1); view.nextWave = now + 1300; }
+  view.waves.forEach(w => { w.r += dt * R * 0.75 * (0.8 + view.speed * 0.3); });
+  view.waves = view.waves.filter(w => w.r < R * 1.3);
+  const w = view.waves[view.waves.length - 1];
+  U.uWaveR.value = w ? w.r : 999;
+  U.uWaveAmp.value = w ? w.amp * (1 - w.r / (R * 1.3)) : 0;
+
+  // Reflete a cor do estado na interface
+  cssDeep.copy(view.deep); cssHot.copy(view.hot);
+  const rgb = `${Math.round(cssHot.r * 255 * 0.5 + cssDeep.r * 255 * 0.5)}, ${Math.round(cssHot.g * 255 * 0.5 + cssDeep.g * 255 * 0.5)}, ${Math.round(cssHot.b * 255 * 0.5 + cssDeep.b * 255 * 0.5)}`;
+  document.documentElement.style.setProperty('--accent-rgb', rgb);
+  document.documentElement.style.setProperty('--accent', `rgb(${rgb})`);
+  document.documentElement.style.setProperty('--line', `rgba(${rgb}, .22)`);
+}
+
+/* =====================================================================
+   Emoções — leitura do tom da resposta (pt/en)
+   ===================================================================== */
+const EMOTION_LEXICON = {
+  joy:       ['ótimo', 'otimo', 'excelente', 'maravilh', 'incrível', 'incrivel', 'feliz', 'parabéns', 'parabens', 'perfeito', 'adorei', 'legal', 'show', 'sucesso', 'conseguiu', 'great', 'awesome', 'happy', 'congrat', 'excellent', 'wonderful', '😄', '🎉', '😊', '!'],
+  affection: ['obrigad', 'carinho', 'amor', 'querid', 'gentil', 'agradeço', 'cuide', 'abraço', 'thank', 'love', 'kind', '❤', '🙏'],
+  curiosity: ['interessante', 'curios', 'fascinante', 'será que', 'descobr', 'explorar', 'pergunta', 'hipótese', 'imagine', 'interesting', 'curious', 'wonder', '🤔', '?'],
+  sadness:   ['triste', 'lament', 'infelizmente', 'perda', 'saudade', 'sinto muito', 'difícil', 'dificil', 'sozinh', 'sad', 'sorry', 'unfortunately', 'loss', '😢'],
+  concern:   ['cuidado', 'atenção', 'atencao', 'perigo', 'risco', 'alerta', 'grave', 'urgente', 'erro', 'falha', 'problema', 'não consigo', 'nao consigo', 'warning', 'danger', 'risk', 'careful', 'error', 'cannot', '⚠'],
+  calm:      ['calma', 'tranquil', 'respire', 'relax', 'paz', 'devagar', 'sereno', 'equilíbrio', 'descanso', 'calm', 'peace', 'relax', 'breathe'],
+};
+function detectEmotion(text) {
+  const t = text.toLowerCase();
+  let best = 'joy', bestScore = 0;
+  for (const [emo, words] of Object.entries(EMOTION_LEXICON)) {
+    let s = 0;
+    for (const w of words) {
+      if (w.length === 1) s += Math.min(3, t.split(w).length - 1) * 0.35;
+      else s += t.split(w).length - 1;
+    }
+    if (s > bestScore) { bestScore = s; best = emo; }
+  }
+  return bestScore >= 1 ? best : 'idle';
+}
+
+/* =====================================================================
+   Loop de animação
+   ===================================================================== */
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05), now = performance.now();
+  updateView(dt, now);
+  U.uTime.value += dt * view.speed;
+
+  holo.rotation.y += dt * 0.035 * view.speed;
+  shellA.rotation.x += dt * 0.012 * view.speed;
+  orbits.forEach(o => o.rotateOnAxis(o.userData.spin, dt * o.userData.speed * view.speed));
+  coreGroup.rotation.z -= dt * 0.18 * view.speed;
+  fragments.rotation.y -= dt * 0.02 * view.speed;
+  panels.rotation.y += dt * 0.015 * view.speed;
+
+  const pulse = 1 + 0.06 * Math.sin(U.uTime.value * 2.2) + view.burst * 0.25 + view.voice * 0.4;
+  sun.scale.setScalar(2.6 * pulse * (0.8 + view.energy * 0.25));
+  sun.material.color.copy(view.hot).lerp(new THREE.Color(1, 1, 1), 0.55);
+  halo.material.color.copy(view.hot); halo.material.opacity = 0.03 + view.energy * 0.025;
+  haze.material.color.copy(view.deep);
+  bloom.strength = 0.7 + view.energy * 0.2;
+
+  // As estrelas acesas esmaecem aos poucos; filamentos herdam o brilho
+  if (knowledge.points) {
+    const hi = knowledge.hi, decay = Math.exp(-dt * 0.35);
+    let changed = false;
+    for (let i = 0; i < hi.length; i++) if (hi[i] > 0.001) { hi[i] *= decay; changed = true; }
+    if (changed) {
+      knowledge.points.geometry.attributes.aHi.needsUpdate = true;
+      const eh = knowledge.edgeHi;
+      knowledge.edges.forEach((e, i) => {
+        const v = Math.min(hi[knowledge.byId.get(e.source)], hi[knowledge.byId.get(e.target)]);
+        eh[i * 2] = eh[i * 2 + 1] = v;
+      });
+      knowledge.lines.geometry.attributes.aHi.needsUpdate = true;
+    }
+  }
+
+  controls.autoRotateSpeed = 0.25 * view.speed;
+  controls.update();
+  composer.render();
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  lens.uniforms.uRes.value.set(innerWidth, innerHeight);
+  frameView();
+});
+
+/* =====================================================================
+   Interação com as estrelas (hover / clique)
+   ===================================================================== */
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 0.35;
+const mouse = new THREE.Vector2();
+const tip = document.getElementById('tip');
+let hovered = -1;
+
+function pick(ev) {
+  if (!knowledge.points) return -1;
+  const rect = canvas.getBoundingClientRect();
+  mouse.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObject(knowledge.points);
+  const hit = hits.find(h => knowledge.nodes[h.index].kind !== 'core') || hits[0];
+  return hit ? hit.index : -1;
+}
+canvas.addEventListener('pointermove', ev => {
+  hovered = pick(ev);
+  if (hovered < 0) { tip.style.opacity = 0; canvas.style.cursor = ''; return; }
+  const n = knowledge.nodes[hovered];
+  tip.innerHTML = `<small>${(KIND[n.kind] || {}).label || n.kind}</small>${escapeHtml(n.label)}`;
+  tip.style.left = `${Math.min(ev.clientX + 14, innerWidth - 290)}px`;
+  tip.style.top = `${ev.clientY + 14}px`;
+  tip.style.opacity = 1; canvas.style.cursor = 'pointer';
+});
+canvas.addEventListener('pointerleave', () => { tip.style.opacity = 0; });
+let downAt = null;
+canvas.addEventListener('pointerdown', ev => { downAt = [ev.clientX, ev.clientY]; });
+canvas.addEventListener('pointerup', ev => {
+  if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const i = pick(ev);
+  if (i < 0) { detail.classList.remove('show'); return; }
+  showDetail(i);
+});
+
+const detail = document.getElementById('detail');
+document.getElementById('detailClose').onclick = () => detail.classList.remove('show');
+function showDetail(i) {
+  const n = knowledge.nodes[i];
+  const links = knowledge.edges.filter(e => e.source === n.id || e.target === n.id);
+  document.getElementById('dKind').textContent = (KIND[n.kind] || {}).label || n.kind;
+  document.getElementById('dTitle').textContent = n.label;
+  document.getElementById('dBody').textContent = n.detail || (n.kind === 'hub' ? `${n.count} estrelas nesta constelação.` : '');
+  const when = n.created_at ? new Date(n.created_at * 1000).toLocaleString('pt-BR') : '';
+  document.getElementById('dMeta').textContent = [`${links.length} conexões`, when, n.source].filter(Boolean).join(' · ');
+  detail.classList.add('show');
+  // Acende a estrela e sua vizinhança
+  knowledge.hi[i] = 2;
+  links.forEach(e => { const j = knowledge.byId.get(e.source === n.id ? e.target : e.source); knowledge.hi[j] = Math.max(knowledge.hi[j], 1.1); });
+}
+
+/* =====================================================================
+   API
+   ===================================================================== */
+const API_KEY = (() => { try { return JSON.parse(localStorage.getItem('openjarvis-settings') || '{}').apiKey || ''; } catch { return ''; } })();
+const headers = (extra = {}) => (API_KEY ? { ...extra, Authorization: `Bearer ${API_KEY}` } : extra);
+let MODEL = 'default';
+
+async function loadModel() {
+  try {
+    const r = await fetch('/v1/models', { headers: headers() });
+    const d = await r.json();
+    MODEL = d.data?.[0]?.id || MODEL;
+  } catch { /* usa o modelo padrão do servidor */ }
+}
+
+let lastGraph = null;
+async function loadGraph() {
+  try {
+    const r = await fetch('/v1/knowledge/graph', { headers: headers() });
+    if (!r.ok) throw new Error(r.status);
+    lastGraph = await r.json();
+    buildKnowledge(lastGraph);
+  } catch (e) {
+    document.getElementById('stats').textContent = 'mapa de conhecimento indisponível';
+    console.warn('graph', e);
+  }
+}
+
+function updateStats(g) {
+  const count = k => g.nodes.filter(n => n.kind === k).length;
+  document.getElementById('stats').innerHTML =
+    `<b>${g.nodes.length - 1}</b> estrelas · <b>${g.edges.length}</b> conexões<br>` +
+    `${count('conversation')} conversas · ${count('memory') + count('fact')} memórias · ${count('tool')} ferramentas`;
+}
+
+/* =====================================================================
+   Chat
+   ===================================================================== */
+const messagesEl = document.getElementById('messages');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const history = [];
+let busy = false;
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function renderMarkdown(src) {
+  let h = escapeHtml(src);
+  h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, __, code) => `<pre>${code}</pre>`);
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  return h.replace(/\n/g, '<br>');
+}
+function addMessage(role, text = '') {
+  document.getElementById('empty')?.remove();
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  el.innerHTML = `<div class="who">${role === 'user' ? 'Você' : 'Jarvis'}</div><div class="body"></div>`;
+  el.querySelector('.body').innerHTML = renderMarkdown(text);
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return el;
+}
+
+/* =====================================================================
+   Marcações na resposta: [[emocao: …]] e [[imagem|video: URL | legenda]]
+   ===================================================================== */
+const GALAXY_PROMPT = [
+  'Comece TODA resposta com uma marcação da emoção com que você responde, exatamente assim: [[emocao: X]] — ' +
+  'onde X é um de: alegria, afeto, curiosidade, serenidade, tristeza, preocupacao, neutro. Escolha a que combina com o tom da conversa.',
+  'Quando o usuário pedir uma imagem, foto, vídeo, ou pedir para mostrar/trazer algo visual: pesquise na internet e ' +
+  'coloque no fim da resposta uma linha por mídia (no máximo 4), exatamente assim: [[imagem: URL | legenda curta]], [[video: URL | legenda curta]] ' +
+  'ou, para músicas, [[musica: URL | artista – música]] (prefira o vídeo/áudio oficial no YouTube ou o SoundCloud). ' +
+  'Use apenas URLs reais que você encontrou na pesquisa. Para imagens prefira o link direto do arquivo (por exemplo upload.wikimedia.org/…jpg) ' +
+  'ou a página onde a imagem está; para vídeos prefira links do YouTube. Nunca invente URLs.',
+  'Não comente as marcações nem mostre as URLs no texto; apenas diga, com naturalidade, que está mostrando a imagem, o vídeo ou a música. ' +
+  'Não pergunte se o usuário quer reproduzir: a interface pergunta sozinha. Quando mostrar mídia, não inclua links nem uma seção de fontes no texto. ' +
+  'Nunca afirme que já está tocando ou reproduzindo algo: quem inicia a reprodução é a interface, depois da confirmação do usuário.',
+].join('\n');
+const MOODS = { alegria: 'joy', afeto: 'affection', curiosidade: 'curiosity', serenidade: 'calm', calma: 'calm',
+                tristeza: 'sadness', preocupacao: 'concern', 'preocupação': 'concern', neutro: 'idle' };
+const TAG_RE = /\[\[\s*([a-zà-ÿ]+)\s*:\s*([^\]]*?)\s*\]\]/gi;
+const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
+
+function parseReply(text) {
+  let mood = null;
+  const media = [];
+  let clean = text.replace(TAG_RE, (_, key, value) => {
+    key = key.toLowerCase();
+    if (/^emo[cç][aã]o$|^humor$|^mood$/.test(key)) {
+      mood = MOODS[value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] ?? MOODS[value.toLowerCase()] ?? mood;
+    } else if (/^(imagem|image|foto|v[ií]deo|video|m[uú]sica|music|[aá]udio|audio)$/.test(key)) {
+      const [url, ...cap] = value.split('|');
+      const kind = /^(imagem|image|foto)$/.test(key) ? 'image' : /^(m[uú]sica|music|[aá]udio|audio)$/.test(key) ? 'audio' : 'video';
+      if (/^https?:\/\//i.test(url.trim())) media.push({ kind, url: url.trim(), caption: cap.join('|').trim() });
+    }
+    return '';
+  });
+  clean = clean.replace(MD_IMAGE_RE, (_, alt, url) => { media.push({ kind: 'image', url, caption: alt }); return ''; });
+  clean = clean.replace(/\[\[[^\]]*$/, '')            // marcação ainda chegando
+               .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { clean, mood, media };
+}
+
+function setMood(mood) {
+  if (!mood || mood === view.mood) return;
+  view.mood = mood;
+  if (view.state === 'speaking') setState('speaking');
+}
+
+/* Envia `messages` e processa o streaming SSE; devolve o texto completo. */
+async function streamReply(messages, { onDelta, onEvent }) {
+  const res = await fetch('/v1/chat/completions', {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ model: MODEL, messages, stream: true, max_tokens: 2048 }),
+  });
+  if (!res.ok) throw new Error(`O servidor respondeu ${res.status}`);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', event, answer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop() || '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) { event = line.slice(7).trim(); continue; }
+      if (!line.startsWith('data: ')) { if (!line.trim()) event = undefined; continue; }
+      const data = line.slice(6);
+      if (data === '[DONE]') return answer;
+      let json; try { json = JSON.parse(data); } catch { continue; }
+      if (event) { onEvent(event, json); event = undefined; continue; }
+      const delta = json.choices?.[0]?.delta?.content;
+      if (delta) {
+        answer += delta;
+        setMood(parseReply(answer).mood);
+        if (view.state !== 'speaking') setState('speaking');
+        view.burst = Math.min(1.5, view.burst + 0.25);
+        onDelta(delta, answer);
+      }
+    }
+  }
+  return answer;
+}
+
+/* Reação do universo depois de cada resposta */
+function afterReply(question, answer) {
+  history.push({ role: 'assistant', content: answer });
+  const { clean, mood, media } = parseReply(answer);
+  view.mood = mood || detectEmotion(clean);   // sem marcação: lê o tom do texto
+  setState(view.mood, 12000);
+  illuminate(`${question} ${clean}`, 1.6);
+  if (media.length) mediaBox.open(media);
+  setTimeout(loadGraph, 1200); // a nova conversa nasce como estrela
+  // Resposta só com mídia: ainda assim o Jarvis diz algo
+  return clean || (media.length ? (media.length > 1 ? 'Aqui estão.' : 'Aqui está.') : '');
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  const decision = playPrompt.check(text);
+  if (decision) {
+    addMessage('user', text);
+    const reply = decision === 'yes' ? mediaBox.play() : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
+    addMessage('bot', reply);
+    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+    if (decision !== 'yes' && ttsOn) speaker.say(reply);
+    return;
+  }
+  busy = true; sendBtn.disabled = true;
+  addMessage('user', text);
+  history.push({ role: 'user', content: text });
+  illuminate(text, 1.2);
+  view.mood = 'idle';
+  setState('thinking');
+
+  const el = addMessage('bot');
+  const body = el.querySelector('.body');
+  const phase = document.createElement('div'); phase.className = 'phase'; phase.textContent = 'analisando…';
+  el.appendChild(phase);
+  body.innerHTML = '<span class="caret"></span>';
+
+  try {
+    const answer = await streamReply([{ role: 'system', content: GALAXY_PROMPT }, ...history], {
+      onDelta: (_, full) => {
+        phase.textContent = '';
+        body.innerHTML = renderMarkdown(parseReply(full).clean) + '<span class="caret"></span>';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      },
+      onEvent: (name, data) => handleAgentEvent(name, data, t => { phase.textContent = t; }),
+    });
+    phase.remove();
+    const clean = afterReply(text, answer);
+    body.innerHTML = renderMarkdown(clean || '(sem resposta)');
+    if (ttsOn) { speaker.stop(); splitSentences(clean).forEach(s => speaker.say(s)); }
+  } catch (err) {
+    el.classList.add('err');
+    body.textContent = `Não consegui responder: ${err.message}`;
+    phase.remove();
+    history.pop();
+    setState('error', 6000);
+  } finally {
+    busy = false; sendBtn.disabled = false; input.focus();
+  }
+}
+
+function handleAgentEvent(name, data, showPhase = () => {}) {
+  if (name === 'tool_call_start') {
+    setState('tool');
+    showPhase(`⟢ ${data.tool || 'ferramenta'}…`);
+    illuminate(String(data.tool || '').replace(/_/g, ' '), 2);
+  } else if (name === 'tool_call_end') {
+    setState(data.success === false ? 'concern' : 'thinking');
+    showPhase('integrando resultado…');
+  } else if (name === 'inference_start') {
+    if (view.state !== 'speaking') setState('thinking');
+  }
+}
+
+document.getElementById('composer').addEventListener('submit', ev => { ev.preventDefault(); const t = input.value; input.value = ''; autosize(); send(t); });
+input.addEventListener('keydown', ev => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); document.getElementById('composer').requestSubmit(); } });
+input.addEventListener('input', () => { autosize(); if (!busy && view.state === 'idle' && input.value) setState('listening', 2500); });
+function autosize() { input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 140)}px`; }
+document.getElementById('clearBtn').onclick = () => {
+  history.length = 0;
+  messagesEl.innerHTML = '<div class="empty" id="empty"><b>NOVA SESSÃO</b>Memória de conversa limpa.</div>';
+  setState('calm', 3000);
+};
+document.getElementById('toggleChat').onclick = () => document.getElementById('chat').classList.toggle('collapsed');
+
+/* =====================================================================
+   Voz — transcrição pelo Whisper do servidor, fala pelo navegador
+   ===================================================================== */
+// Frases que o Whisper costuma "ouvir" no silêncio ou no ruído
+const WHISPER_PHANTOMS = /^(obrigad[oa]\.?|tchau\.?|legendas? (pela|por) .*|.*amara\.org.*|inscreva-se.*|\.+|…|thank you\.?|you)$/i;
+
+const TRANSCRIBE_TIMEOUT_MS = 25000;
+async function transcribe(blob) {
+  const fd = new FormData();
+  fd.append('file', blob, `voz.${blob.type.includes('mp4') ? 'mp4' : 'webm'}`);
+  fd.append('language', 'pt');
+  // Nunca fica preso em "Transcrevendo…": desiste depois de um tempo
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TRANSCRIBE_TIMEOUT_MS);
+  let r;
+  try { r = await fetch('/v1/speech/transcribe', { method: 'POST', headers: headers(), body: fd, signal: ctrl.signal }); }
+  catch (err) { throw new Error(err.name === 'AbortError' ? 'demorou demais — tente de novo' : err.message); }
+  finally { clearTimeout(timer); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `erro ${r.status}`);
+  return (d.text || '').trim();
+}
+
+function micLevel(analyser, buf) {
+  analyser.getByteTimeDomainData(buf);
+  let sum = 0; for (const v of buf) sum += ((v - 128) / 128) ** 2;
+  return Math.sqrt(sum / buf.length);
+}
+
+function micHelp(err) {
+  if (err?.name === 'NotAllowedError')
+    return 'Sem acesso ao microfone. Clique no ícone à esquerda do endereço, permita o microfone para este site e recarregue a página.';
+  if (err?.name === 'NotFoundError') return 'Nenhum microfone encontrado neste computador.';
+  return `Sem acesso ao microfone (${err?.name || 'erro'}): ${err?.message || ''}`;
+}
+
+async function openMic() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const ctx = new AudioContext(), analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  return { stream, ctx, analyser, buf: new Uint8Array(analyser.fftSize),
+           close() { stream.getTracks().forEach(t => t.stop()); ctx.close(); } };
+}
+
+// Microfone de toque único (modo texto): grava até o silêncio e envia
+const micBtn = document.getElementById('micBtn');
+let rec = null;
+micBtn.onclick = async () => {
+  if (rec) { rec.stop(); return; }
+  let mic;
+  try { mic = await openMic(); }
+  catch (err) { addMessage('bot', micHelp(err)).classList.add('err'); return; }
+  const chunks = [], mr = new MediaRecorder(mic.stream);
+  let silentSince = performance.now(), heard = false;
+  rec = mr;
+  micBtn.classList.add('rec');
+  setState('listening');
+  const meter = () => {
+    if (rec !== mr) return;
+    const level = micLevel(mic.analyser, mic.buf);
+    view.voice = Math.min(1, level * 6);   // a esfera pulsa com a sua voz
+    const now = performance.now();
+    if (level > 0.035) { heard = true; silentSince = now; }
+    else if (heard && now - silentSince > 1500) mr.stop();   // silêncio encerra
+    requestAnimationFrame(meter);
+  };
+  mr.ondataavailable = e => chunks.push(e.data);
+  mr.onstop = async () => {
+    rec = null; view.voice = 0;
+    micBtn.classList.remove('rec');
+    mic.close();
+    if (!heard) { setState('idle'); return; }
+    setState('thinking');
+    try {
+      const text = await transcribe(new Blob(chunks, { type: mr.mimeType || 'audio/webm' }));
+      if (text && !WHISPER_PHANTOMS.test(text)) send(text); else setState('idle');
+    } catch (err) {
+      addMessage('bot', `Transcrição indisponível: ${err.message}`).classList.add('err');
+      setState('error', 5000);
+    }
+  };
+  mr.start();
+  meter();
+};
+
+// Fila de fala: frases são ditas em ordem, assim que ficam prontas
+function splitSentences(text) {
+  return (text.match(/[^.!?…\n]+(?:[.!?…]+|\n+|$)/g) || []).map(s => s.trim()).filter(Boolean);
+}
+function spokenText(s) {
+  return s.replace(TAG_RE, ' ').replace(/\[\[[^\]]*$/, '').replace(/```[\s\S]*?```/g, ' ').replace(/https?:\/\/\S+/g, 'link')
+          .replace(/[*_`#>|~]/g, '').replace(/^\s*[-•]\s*/gm, '').replace(/\s+/g, ' ').trim();
+}
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* opcional */ } },
+};
+let ptVoice = null;
+let voiceRate = Number(store.get('galaxy-voice-rate', '1.05')) || 1.05;
+// Vozes neurais/aprimoradas soam bem melhor que as "Eloquence" (Eddy, Flo, Reed…)
+const isBetterVoice = v => /Luciana|Francisca|Thalita|Antonio|Google|Natural|Premium|Enhanced|Aprimorad|Neural/i.test(v.name);
+function pickVoice() {
+  const voices = speechSynthesis.getVoices();
+  const saved = store.get('galaxy-voice', '');
+  ptVoice = voices.find(v => v.voiceURI === saved || v.name === saved) ||
+            voices.find(v => v.lang === 'pt-BR' && isBetterVoice(v)) ||
+            voices.find(v => v.lang === 'pt-BR') || voices.find(v => v.lang?.startsWith('pt')) || null;
+  renderVoices();
+}
+if ('speechSynthesis' in window) { speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
+
+const speaker = {
+  queue: [], active: false, waiters: [], gen: 0,
+  say(text, onStart) {
+    const clean = spokenText(text);
+    if (!clean) return;
+    if (!ttsOn || !('speechSynthesis' in window)) { onStart?.(); return; }   // som desligado: só texto
+    this.queue.push({ clean, onStart });
+    if (!this.active) this.next();
+  },
+  next() {
+    const item = this.queue.shift();
+    if (!item) {
+      this.active = false; this.waiters.splice(0).forEach(r => r());
+      if (view.state === 'speaking') setState(view.mood, 10000);   // terminou de falar
+      return;
+    }
+    this.active = true;
+    const u = new SpeechSynthesisUtterance(item.clean);
+    u.lang = ptVoice?.lang || 'pt-BR'; u.rate = voiceRate;
+    if (ptVoice) u.voice = ptVoice;
+    let started = false, finished = false;
+    const gen = this.gen;
+    const finish = () => {
+      if (finished || gen !== this.gen) return;   // fala cancelada por stop()
+      finished = true; clearTimeout(guard);
+      if (!started) item.onStart?.();
+      this.next();
+    };
+    // Sem voz disponível (ou motor travado): mostra o texto e segue a fila
+    const guard = setTimeout(() => { if (!started) { speechSynthesis.cancel(); finish(); } }, 3000);
+    u.onstart = () => { started = true; clearTimeout(guard); item.onStart?.(); if (view.state !== 'speaking') setState('speaking'); };
+    u.onboundary = () => { view.burst = Math.min(1.5, view.burst + 0.5); };
+    u.onend = u.onerror = finish;
+    speechSynthesis.speak(u);
+  },
+  // flush: mostra o texto das frases que não chegaram a ser ditas
+  stop({ flush = false } = {}) {
+    this.gen++;
+    const left = this.queue.splice(0);
+    window.speechSynthesis?.cancel();
+    this.active = false;
+    if (flush) left.forEach(item => item.onStart?.());
+    this.waiters.splice(0).forEach(r => r());
+    if (view.state === 'speaking') setState(view.mood, 8000);
+  },
+  drained() { return this.active || this.queue.length ? new Promise(r => this.waiters.push(r)) : Promise.resolve(); },
+};
+
+const ttsBtn = document.getElementById('ttsBtn');
+let ttsOn = (() => { try { return localStorage.getItem('galaxy-tts') === '1'; } catch { return false; } })();
+ttsBtn.classList.toggle('on', ttsOn);
+function setSound(on, { persist = true } = {}) {
+  ttsOn = on;
+  ttsBtn.classList.toggle('on', on);
+  ttsBtn.setAttribute('aria-pressed', String(on));
+  ttsBtn.title = on ? 'Som ligado: o Jarvis fala as respostas' : 'Som desligado: respostas só em texto';
+  if (persist) store.set('galaxy-tts', on ? '1' : '0');
+  if (!on) { speaker.stop({ flush: true }); window.speechSynthesis?.cancel(); }   // cala na hora, sem perder o texto
+}
+ttsBtn.onclick = () => setSound(!ttsOn);
+setSound(ttsOn, { persist: false });
+
+/* =====================================================================
+   Seletor de voz
+   ===================================================================== */
+const voiceBtn = document.getElementById('voiceBtn');
+const voicePanel = document.getElementById('voicePanel');
+const vpList = document.getElementById('vpList');
+const vpAll = document.getElementById('vpAll');
+const vpRate = document.getElementById('vpRate');
+const vpRateOut = document.getElementById('vpRateOut');
+const SAMPLE = 'Olá, eu sou o Jarvis. É assim que a minha voz soa.';
+let previewing = null;
+
+function langLabel(lang) {
+  try { return new Intl.DisplayNames(['pt-BR'], { type: 'language' }).of(lang) || lang; } catch { return lang; }
+}
+
+function renderVoices() {
+  if (!('speechSynthesis' in window)) { vpList.innerHTML = '<div class="vp-empty">Este navegador não tem síntese de voz.</div>'; return; }
+  const all = speechSynthesis.getVoices();
+  let voices = vpAll.checked ? all : all.filter(v => v.lang?.toLowerCase().startsWith('pt'));
+  if (!voices.length && !vpAll.checked) voices = all;
+  voices = [...voices].sort((a, b) =>
+    (b.lang === 'pt-BR') - (a.lang === 'pt-BR') || isBetterVoice(b) - isBetterVoice(a) || a.name.localeCompare(b.name));
+  document.getElementById('vpCount').textContent = `${voices.length} voz${voices.length === 1 ? '' : 'es'}`;
+  vpList.innerHTML = '';
+  if (!voices.length) { vpList.innerHTML = '<div class="vp-empty">Nenhuma voz encontrada.</div>'; return; }
+  for (const v of voices) {
+    const item = document.createElement('div');
+    const selected = ptVoice && v.voiceURI === ptVoice.voiceURI;
+    item.className = 'vp-item';
+    item.setAttribute('role', 'radio');
+    item.setAttribute('aria-checked', String(!!selected));
+    item.tabIndex = selected ? 0 : -1;
+    const name = v.name.replace(/\s*\((português|portuguese).*\)\s*$/i, '');
+    item.innerHTML = `<span class="vp-dot"></span>
+      <span class="vp-name">${escapeHtml(name)}<small>${escapeHtml(langLabel(v.lang))} · ${v.localService ? 'local' : 'online'}</small></span>
+      ${isBetterVoice(v) ? '<span class="vp-tag best">NATURAL</span>' : ''}
+      <button type="button" class="icon-btn vp-play" aria-label="Ouvir ${escapeHtml(name)}" title="Ouvir amostra">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>`;
+    item.addEventListener('click', ev => {
+      if (ev.target.closest('.vp-play')) { preview(v, ev.target.closest('.vp-play')); return; }
+      chooseVoice(v);
+    });
+    item.addEventListener('keydown', ev => {
+      if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); chooseVoice(v); }
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        const sib = ev.key === 'ArrowDown' ? item.nextElementSibling : item.previousElementSibling;
+        sib?.focus();
+      }
+    });
+    vpList.appendChild(item);
+  }
+}
+
+function chooseVoice(v) {
+  ptVoice = v;
+  store.set('galaxy-voice', v.voiceURI);
+  renderVoices();
+  vpList.querySelector('[aria-checked="true"]')?.focus();
+  preview(v, vpList.querySelector('[aria-checked="true"] .vp-play'));
+}
+
+function preview(v, btn) {
+  if (speaker.active) speaker.stop();
+  speechSynthesis.cancel();
+  vpList.querySelectorAll('.vp-play.playing').forEach(b => b.classList.remove('playing'));
+  if (previewing === v.voiceURI) { previewing = null; return; }   // segundo clique para
+  const u = new SpeechSynthesisUtterance(v.lang?.startsWith('pt') ? SAMPLE : 'Hello, I am Jarvis. This is how my voice sounds.');
+  u.voice = v; u.lang = v.lang; u.rate = voiceRate;
+  previewing = v.voiceURI;
+  btn?.classList.add('playing');
+  u.onstart = () => setState('speaking');
+  u.onboundary = () => { view.burst = Math.min(1.5, view.burst + 0.5); };
+  u.onend = u.onerror = () => { btn?.classList.remove('playing'); if (previewing === v.voiceURI) previewing = null; setState('idle'); };
+  speechSynthesis.speak(u);
+}
+
+function toggleVoicePanel(open = !voicePanel.classList.contains('show')) {
+  voicePanel.classList.toggle('show', open);
+  voiceBtn.classList.toggle('on', open);
+  voiceBtn.setAttribute('aria-expanded', String(open));
+  if (open) { renderVoices(); (vpList.querySelector('[aria-checked="true"]') || vpList.querySelector('.vp-item'))?.focus(); }
+}
+voiceBtn.onclick = ev => { ev.stopPropagation(); toggleVoicePanel(); };
+voicePanel.addEventListener('click', ev => ev.stopPropagation());
+document.addEventListener('click', () => toggleVoicePanel(false));
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && voicePanel.classList.contains('show')) { ev.stopImmediatePropagation(); toggleVoicePanel(false); voiceBtn.focus(); } }, true);
+vpAll.onchange = renderVoices;
+vpRate.value = voiceRate;
+vpRateOut.textContent = `${voiceRate.toFixed(2)}×`;
+vpRate.oninput = () => { voiceRate = Number(vpRate.value); vpRateOut.textContent = `${voiceRate.toFixed(2)}×`; store.set('galaxy-voice-rate', String(voiceRate)); };
+vpRate.onchange = () => ptVoice && preview(ptVoice, null);
+if ('speechSynthesis' in window) pickVoice();
+
+/* =====================================================================
+   Modo conversa — mãos livres; o chat mostra só o que foi falado
+   ===================================================================== */
+const VOICE_PROMPT = 'Você está numa conversa por voz: sua resposta será lida em voz alta. ' +
+  'Responda em português do Brasil, de forma natural e breve (1 a 3 frases, salvo se pedirem detalhes), ' +
+  'sem markdown, listas, emojis, tabelas ou blocos de código.';
+const GOODBYE = /^\s*(tchau|até (logo|mais)|encerrar( a)? conversa|pode (parar|desligar)|desligar)\b[\s,.!]*(jarvis)?[\s.!]*$/i;
+
+const chatEl = document.getElementById('chat');
+const convEl = document.getElementById('conversation');
+const talkBar = document.getElementById('talkBar');
+const talkStatus = document.getElementById('talkStatus');
+const talkHint = document.getElementById('talkHint');
+const talkOrb = document.getElementById('talkOrb');
+const talkBtn = document.getElementById('talkBtn');
+
+const talk = {
+  on: false, mic: null, phase: 'off', timer: null, recorder: null, chunks: [],
+  floor: 0.01, voiceSince: 0, silentSince: 0, startedAt: 0, armedAt: 0,
+  turn: 0,   // cada interrupção/encerramento invalida o turno em andamento
+
+  async start() {
+    if (this.on) return;
+    if (!ttsOn) setSound(true, { persist: false });
+    try { this.mic = await openMic(); }
+    catch (err) { addMessage('bot', micHelp(err)).classList.add('err'); return; }
+    this.on = true;
+    chatEl.classList.add('talk'); chatEl.classList.remove('collapsed');
+    talkBtn.classList.add('on'); talkBtn.setAttribute('aria-pressed', 'true');
+    document.getElementById('chatTitle').textContent = 'Conversa';
+    if (!convEl.children.length) convEl.innerHTML = '<div class="talk-hello" id="talkHello"><b>MODO CONVERSA</b>Fale naturalmente — eu escuto, respondo em voz<br>e aqui fica só o que dissermos.</div>';
+    this.calibrate();
+  },
+
+  stop() {
+    if (!this.on) return;
+    this.on = false; this.turn++;
+    clearInterval(this.timer);
+    this.disarm();
+    this.mic?.close(); this.mic = null;
+    speaker.stop();
+    view.voice = 0;
+    chatEl.classList.remove('talk');
+    talkBtn.classList.remove('on'); talkBtn.setAttribute('aria-pressed', 'false');
+    document.getElementById('chatTitle').textContent = 'Canal';
+    this.setPhase('off');
+    if (view.state === 'listening') setState('idle');
+  },
+
+  setPhase(phase, status, hint) {
+    this.phase = phase;
+    talkBar.dataset.phase = phase;
+    if (status) talkStatus.textContent = status;
+    talkHint.textContent = hint ?? 'Diga “tchau, Jarvis” para encerrar';
+  },
+
+  // Mede o ruído ambiente por meio segundo para ajustar a sensibilidade
+  calibrate() {
+    this.setPhase('calibrating', 'Ajustando ao ambiente…', 'Um instante de silêncio');
+    const samples = [];
+    const t0 = performance.now();
+    const id = setInterval(() => {
+      if (!this.on) return clearInterval(id);
+      samples.push(micLevel(this.mic.analyser, this.mic.buf));
+      if (performance.now() - t0 > 600) {
+        clearInterval(id);
+        samples.sort((a, b) => a - b);
+        this.floor = samples[Math.floor(samples.length / 2)] || 0.01;
+        this.listen();
+      }
+    }, 30);
+  },
+
+  listen() {
+    if (!this.on) return;
+    this.setPhase('listening', 'Pode falar…');
+    setState('listening');
+    const threshold = Math.max(0.022, this.floor * 3);
+    clearInterval(this.timer);
+    this.voiceSince = 0;
+    this.arm();
+    this.timer = setInterval(() => {
+      const level = micLevel(this.mic.analyser, this.mic.buf);
+      view.voice = Math.min(1, level * 6);
+      talkOrb.style.setProperty('--lvl', Math.min(1, level * 8).toFixed(2));
+      const now = performance.now();
+      if (this.phase === 'listening') {
+        if (level > threshold) {
+          this.voiceSince ||= now;
+          if (now - this.voiceSince > 90) this.beginRecording(now);   // ignora estalos curtos
+        } else {
+          this.voiceSince = 0;
+          if (now - this.armedAt > 2500) this.arm();   // pré-gravação curta: silêncio longo atrasa o Whisper
+        }
+      } else if (this.phase === 'recording') {
+        if (level > threshold * 0.8) this.silentSince = now;
+        const long = now - this.startedAt > 20000;
+        if (now - this.silentSince > 1200 || long) this.finishRecording();
+      }
+    }, 30);
+  },
+
+  // O gravador já roda enquanto escuta: assim o início da fala ("sim", "Jarvis…")
+  // não é cortado pelo tempo que o detector leva para perceber a voz
+  arm() {
+    this.disarm();
+    this.chunks = [];
+    this.recorder = new MediaRecorder(this.mic.stream);
+    this.recorder.ondataavailable = e => this.chunks.push(e.data);
+    this.recorder.start();
+    this.armedAt = performance.now();
+  },
+
+  disarm() {
+    if (this.recorder?.state === 'recording') { this.recorder.onstop = null; this.recorder.stop(); }
+    this.recorder = null;
+  },
+
+  beginRecording(now) {
+    if (!this.recorder) this.arm();
+    this.startedAt = this.silentSince = now;
+    this.setPhase('recording', 'Ouvindo…', 'Pausa de um segundo e eu respondo');
+  },
+
+  finishRecording() {
+    const recorder = this.recorder, duration = performance.now() - this.startedAt;
+    clearInterval(this.timer);
+    view.voice = 0; talkOrb.style.setProperty('--lvl', 0);
+    this.setPhase('busy', 'Transcrevendo…', 'Toque no círculo para cancelar');
+    const chunks = this.chunks;
+    this.recorder = null;             // a próxima escuta arma um gravador novo
+    if (!recorder || recorder.state !== 'recording') return this.listen();   // gravador caiu (mic trocado etc.)
+    let handled = false;
+    const done = () => { if (handled) return; handled = true; this.handleUtterance(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }), duration); };
+    recorder.onstop = done;
+    setTimeout(() => { if (!handled && this.phase === 'busy') { handled = true; this.listen(); } }, 3000);   // onstop não veio
+    try { recorder.stop(); } catch { handled = true; this.listen(); }
+  },
+
+  async handleUtterance(blob, duration) {
+    if (!this.on) return;
+    if (duration < 450) return this.listen();          // ruído, não fala
+    const turn = this.turn;
+    setState('thinking');
+    let text = '';
+    try { text = await transcribe(blob); }
+    catch (err) { this.say('bot', `Não consegui transcrever: ${err.message}`); setState('error', 4000); return this.listen(); }
+    if (!this.on || turn !== this.turn) return;
+    if (!text || WHISPER_PHANTOMS.test(text)) return this.listen();
+
+    document.getElementById('talkHello')?.remove();
+    this.say('user', text);
+    if (GOODBYE.test(text)) {
+      const bye = 'Até logo. Estarei por aqui.';
+      this.say('bot', bye);
+      setState('affection', 6000);
+      speaker.say(bye);
+      await speaker.drained();
+      return this.stop();
+    }
+    const decision = playPrompt.check(text);
+    if (decision) {
+      const reply = decision === 'yes' ? 'Reproduzindo.' : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+      this.say('bot', reply);
+      this.setPhase('busy', 'Jarvis falando…', '');
+      speaker.say(reply);
+      await speaker.drained();
+      if (!this.on || turn !== this.turn) return;
+      if (decision === 'yes') { mediaBox.play(); return; }   // play() pausa a escuta
+      return this.listen();
+    }
+    await this.reply(text, turn);
+    if (this.on && turn === this.turn) this.listen();
+  },
+
+  async reply(text, turn) {
+    busy = true; sendBtn.disabled = true;
+    history.push({ role: 'user', content: text });
+    illuminate(text, 1.2);
+    view.mood = 'idle';
+    this.setPhase('busy', 'Pensando…', 'Toque no círculo para interromper');
+
+    const line = this.say('bot', '');
+    const said = line.querySelector('.text');
+    line.classList.add('pending');
+    let pending = '', shown = false, queued = false;
+    const show = sentence => {
+      if (!shown) { line.classList.remove('pending'); shown = true; }
+      said.querySelectorAll('.now').forEach(e => e.classList.remove('now'));
+      const span = document.createElement('span');
+      span.className = 'said now';
+      span.textContent = `${sentence} `;
+      said.appendChild(span);
+      convEl.scrollTop = convEl.scrollHeight;
+      if (this.phase === 'busy') this.setPhase('busy', 'Jarvis falando…', 'Toque no círculo para interromper');
+    };
+    // Frases completas (terminador seguido de espaço) vão para a fila de fala
+    const flush = final => {
+      pending = pending.replace(TAG_RE, ' ');
+      // Uma marcação [[…]] ainda incompleta fica retida até fechar
+      const open = pending.indexOf('[[');
+      let held = '';
+      if (open !== -1) { held = pending.slice(open); pending = pending.slice(0, open); }
+      const re = /[.!?…]+["”')\]]*\s+|\n+/g;
+      const ready = [];
+      let last = 0, m;
+      while ((m = re.exec(pending))) { ready.push(pending.slice(last, m.index + m[0].length)); last = m.index + m[0].length; }
+      pending = pending.slice(last) + held;
+      if (final) { ready.push(pending.replace(/\[\[[^\]]*$/, '')); pending = ''; }
+      ready.forEach(s => { const clean = spokenText(s); if (clean) { queued = true; speaker.say(clean, () => show(clean)); } });
+    };
+
+    try {
+      const answer = await streamReply([{ role: 'system', content: `${GALAXY_PROMPT}\n${VOICE_PROMPT}` }, ...history], {
+        onDelta: delta => { if (turn !== this.turn) return; pending += delta; flush(false); },
+        onEvent: (name, data) => handleAgentEvent(name, data, t => this.setPhase('busy', t, 'Toque no círculo para interromper')),
+      });
+      if (turn !== this.turn) { history.push({ role: 'assistant', content: answer }); return; }
+      flush(true);
+      if (!answer.trim()) { line.remove(); history.pop(); return; }
+      const clean = afterReply(text, answer);
+      if (!queued && clean) speaker.say(clean, () => show(clean));   // resposta só com mídia
+      await speaker.drained();
+      said.querySelectorAll('.now').forEach(e => e.classList.remove('now'));
+    } catch (err) {
+      line.remove();
+      history.pop();
+      this.say('bot', `Não consegui responder: ${err.message}`);
+      setState('error', 5000);
+    } finally {
+      busy = false; sendBtn.disabled = false;
+    }
+  },
+
+  // Mídia tocando: o microfone pausa para o Jarvis não "ouvir" a música
+  pauseForMedia() {
+    if (!this.on) return;
+    clearInterval(this.timer);
+    this.disarm();
+    view.voice = 0; talkOrb.style.setProperty('--lvl', 0);
+    this.setPhase('paused', 'Reproduzindo mídia', 'Toque no círculo para pausar e voltar a conversar');
+  },
+
+  // Interrompe a fala ou a resposta em andamento e volta a ouvir
+  interrupt() {
+    if (this.on && this.phase === 'paused') { mediaBox.pause(); this.listen(); return; }
+    if (!this.on || this.phase !== 'busy') return;
+    this.turn++;
+    speaker.stop();
+    convEl.querySelector('.line.bot:last-child .now')?.classList.remove('now');
+    setState('idle');
+    this.listen();
+  },
+
+  // Fala algo fora de uma resposta (ex.: a pergunta da caixa de mídia) sem
+  // deixar o microfone ouvir a própria voz do Jarvis
+  async announce(text) {
+    if (!this.on) return;
+    this.say('bot', text);
+    if (this.phase === 'busy' || this.phase === 'recording') { speaker.say(text); return; }   // entra na fila atual
+    const turn = ++this.turn;
+    clearInterval(this.timer);
+    this.disarm();
+    this.setPhase('busy', 'Jarvis falando…', 'Responda “sim” ou “não”');
+    speaker.say(text);
+    await speaker.drained();
+    if (this.on && turn === this.turn && this.phase === 'busy') this.listen();
+  },
+
+  say(role, text) {
+    const el = document.createElement('div');
+    el.className = `line ${role}`;
+    el.innerHTML = `<div class="who">${role === 'user' ? 'Você' : 'Jarvis'}</div><div class="text"></div>`;
+    el.querySelector('.text').textContent = text;
+    convEl.appendChild(el);
+    convEl.scrollTop = convEl.scrollHeight;
+    return el;
+  },
+};
+
+talkBtn.onclick = () => (talk.on ? talk.stop() : talk.start());
+document.getElementById('talkEnd').onclick = () => talk.stop();
+talkOrb.onclick = () => talk.interrupt();
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && talk.on) talk.stop(); });
+
+/* =====================================================================
+   Caixa de mídia — imagens e vídeos que o Jarvis traz
+   ===================================================================== */
+const mediaEl = document.getElementById('media');
+const mediaStage = document.getElementById('mediaStage');
+const mediaKind = document.getElementById('mediaKind');
+const mediaCaption = document.getElementById('mediaCaption');
+const mediaLink = document.getElementById('mediaLink');
+
+function classifyUrl(url) {
+  const yt = url.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (yt) return { type: 'youtube', id: yt[1] };
+  const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vm) return { type: 'vimeo', id: vm[1] };
+  if (/^https?:\/\/(www\.|m\.)?soundcloud\.com\/[^/?#]+\/[^?#]+/.test(url)) return { type: 'soundcloud', src: url };
+  let path = ''; try { path = new URL(url).pathname.toLowerCase(); } catch { return null; }
+  if (/\.(jpe?g|png|gif|webp|avif|svg|bmp)$/.test(path)) return { type: 'image', src: url };
+  if (/\.(mp4|webm|mov|m4v|ogv)$/.test(path)) return { type: 'video', src: url };
+  if (/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/.test(path)) return { type: 'audio', src: url };
+  return null;
+}
+
+async function resolveOnServer(url) {
+  const r = await fetch(`/v1/media/resolve?url=${encodeURIComponent(url)}`, { headers: headers() });
+  if (!r.ok) return null;
+  const d = await r.json();
+  return d.type && d.type !== 'none' ? d : null;
+}
+
+function loadImage(src) {
+  return new Promise((ok, fail) => {
+    const img = new Image();
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => ok(img); img.onerror = fail;
+    img.src = src;
+  });
+}
+
+// Descobre o que exibir para um item; null se não houver mídia utilizável
+async function prepare(item) {
+  let res = classifyUrl(item.url);
+  if (!res) res = await resolveOnServer(item.url).catch(() => null);
+  if (!res) return null;
+  if (res.type === 'image') {
+    try { await loadImage(res.src); }
+    catch {
+      // Não era o arquivo (ex.: página "File:….jpg") ou o link falhou: o servidor descobre
+      const alt = await resolveOnServer(item.url).catch(() => null);
+      if (!alt || alt.type === 'none') return null;
+      if (alt.type === 'image') {
+        if (alt.src === res.src) return null;
+        try { await loadImage(alt.src); } catch { return null; }
+      }
+      res = alt;
+    }
+  }
+  return { ...res, kind: item.kind, caption: item.caption || res.title || '', page: item.url };
+}
+
+const mediaBox = {
+  items: [], index: 0, token: 0,
+
+  async open(requested) {
+    const token = ++this.token;
+    this.items = []; this.index = 0;
+    mediaEl.hidden = false; document.body.classList.add('media-open');
+    mediaEl.style.animation = 'none'; void mediaEl.offsetWidth; mediaEl.style.animation = '';
+    mediaKind.textContent = 'BUSCANDO';
+    mediaStage.className = 'media-stage';
+    mediaStage.innerHTML = '<div class="media-loading">Buscando mídia…</div>';
+    mediaCaption.textContent = ''; mediaLink.hidden = true;
+    this.updateNav();
+    emitWave(1.3); view.burst = 1.5;
+
+    // Mostra a primeira que ficar pronta, sem esperar as outras
+    const jobs = requested.slice(0, 6).map(it => prepare(it));
+    let shown = false;
+    jobs.forEach((job, order) => job.then(res => {
+      if (token !== this.token || !res) return;
+      res.order = order;
+      this.items.push(res);
+      this.items.sort((a, b) => a.order - b.order);
+      if (!shown) { shown = true; this.index = this.items.indexOf(res); this.render({ ask: true }); }
+      else this.updateNav();
+    }));
+    await Promise.allSettled(jobs);
+    if (token !== this.token) return;
+    if (!this.items.length) {
+      mediaKind.textContent = 'MÍDIA';
+      mediaStage.innerHTML = '<div class="media-fail">Não consegui carregar essa mídia.</div>';
+      mediaLink.href = requested[0].url; mediaLink.hidden = false;
+      mediaCaption.textContent = requested[0].caption || '';
+    }
+  },
+
+  render({ ask = false } = {}) {
+    const it = this.items[this.index];
+    if (!it) return;
+    const playable = isPlayable(it);
+    mediaStage.className = `media-stage${playable ? ` video ${it.type}` : ''}`;
+    mediaStage.innerHTML = '';
+    if (it.type === 'image') {
+      const img = document.createElement('img');
+      img.referrerPolicy = 'no-referrer';
+      img.alt = it.caption || 'Imagem trazida pelo Jarvis';
+      img.src = it.src;
+      mediaStage.appendChild(img);
+    } else if (it.type === 'video' || it.type === 'audio') {
+      // Nada toca sozinho: o Jarvis pergunta antes
+      const el = document.createElement(it.type);
+      el.src = it.src; el.controls = true; el.preload = 'metadata';
+      if (it.type === 'video') el.playsInline = true;
+      else mediaStage.insertAdjacentHTML('beforeend', `<div class="audio-card"><span>♪</span><b>${escapeHtml(it.caption || 'Música')}</b></div>`);
+      el.addEventListener('play', () => { this.playing = true; this.hideAsk(); talk.pauseForMedia(); });
+      el.addEventListener('pause', () => { this.playing = false; });
+      mediaStage.appendChild(el);
+    } else {
+      mediaStage.insertAdjacentHTML('beforeend', `<iframe src="${embedUrl(it, false)}" title="${escapeHtml(it.caption || 'Mídia')}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`);
+    }
+    if (playable) {
+      mediaStage.insertAdjacentHTML('beforeend', `<div class="play-ask" id="playAsk">
+        <button type="button" class="play-yes">▶ ${it.type === 'audio' || it.type === 'soundcloud' || it.kind === 'audio' ? 'Tocar' : 'Reproduzir'}</button>
+        <button type="button" class="play-no">Agora não</button></div>`);
+      mediaStage.querySelector('.play-yes').onclick = () => {
+        const msg = this.play();
+        if (!talk.on) addMessage('bot', msg);
+      };
+      mediaStage.querySelector('.play-no').onclick = () => { playPrompt.clear(); this.hideAsk(); };
+      if (ask) playPrompt.ask(it);
+    }
+    this.playing = false;
+    mediaCaption.textContent = it.caption;
+    mediaLink.href = it.page || it.src; mediaLink.hidden = false;
+    this.updateNav();
+  },
+
+  hideAsk() { mediaStage.querySelector('.play-ask')?.remove(); },
+
+  // Inicia a mídia atual; devolve a frase de confirmação
+  play() {
+    const it = this.items[this.index];
+    playPrompt.clear();
+    if (!it || !isPlayable(it)) return 'Não há nada para reproduzir agora.';
+    this.hideAsk();
+    speaker.stop();                       // a mídia não disputa com a voz do Jarvis
+    const el = mediaStage.querySelector('video, audio');
+    const frame = mediaStage.querySelector('iframe');
+    if (el) el.play().catch(() => {});
+    else if (frame) frame.src = embedUrl(it, true);
+    this.playing = true;
+    talk.pauseForMedia();
+    emitWave(1.2); view.burst = 1.2;
+    return `▶ Reproduzindo${it.caption ? ` “${it.caption}”` : ''}.`;
+  },
+
+  pause() {
+    const it = this.items[this.index];
+    this.playing = false;
+    const el = mediaStage.querySelector('video, audio');
+    if (el) { el.pause(); return; }
+    const frame = mediaStage.querySelector('iframe');
+    if (!frame || !it) return;
+    const msg = it.type === 'youtube' ? { event: 'command', func: 'pauseVideo', args: [] } : { method: 'pause' };
+    frame.contentWindow?.postMessage(JSON.stringify(msg), '*');
+  },
+
+  updateNav() {
+    const n = this.items.length, it = this.items[this.index];
+    const kind = !it ? 'BUSCANDO' : it.type === 'image' ? 'IMAGEM' : mediaNoun(it).toUpperCase();
+    if (it) mediaKind.textContent = n > 1 ? `${kind} ${this.index + 1}/${n}` : kind;
+    document.getElementById('mediaPrev').hidden = document.getElementById('mediaNext').hidden = n < 2;
+  },
+
+  step(d) {
+    if (this.items.length < 2) return;
+    this.index = (this.index + d + this.items.length) % this.items.length;
+    this.render();
+  },
+
+  close() {
+    this.token++;
+    playPrompt.clear();
+    mediaStage.innerHTML = '';        // para vídeos em reprodução
+    this.playing = false;
+    mediaEl.hidden = true; mediaEl.classList.remove('big');
+    document.body.classList.remove('media-open');
+    if (talk.on && talk.phase === 'paused') talk.listen();
+  },
+};
+
+function isPlayable(it) { return ['youtube', 'vimeo', 'soundcloud', 'video', 'audio'].includes(it?.type); }
+function mediaNoun(it) { return it.kind === 'audio' || it.type === 'audio' || it.type === 'soundcloud' ? 'música' : 'vídeo'; }
+
+function embedUrl(it, autoplay) {
+  const a = autoplay ? 1 : 0;
+  if (it.type === 'youtube') return `https://www.youtube-nocookie.com/embed/${it.id}?autoplay=${a}&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`;
+  if (it.type === 'vimeo') return `https://player.vimeo.com/video/${it.id}?autoplay=${a}`;
+  if (it.type === 'soundcloud') return `https://w.soundcloud.com/player/?url=${encodeURIComponent(it.src)}&auto_play=${!!autoplay}&visual=true&show_comments=false`;
+  return it.src;
+}
+
+/* Pergunta "quer que eu reproduza?" e interpreta a resposta (texto ou voz) */
+const YES_RE = /^(sim|s|pode|podes|claro|quero|toca|toque|tocar|reproduz\w*|executa\w*|inicia\w*|comeca|play|bora|vai|manda|ok|okay|isso|por favor|com certeza|aham|uhum|yes|yep|beleza|positivo|afirmativo)\b/;
+const NO_RE = /^(nao|n|agora nao|depois|deixa|no|nope|cancela\w*|negativo|nem)\b/;
+const playPrompt = {
+  pending: null,
+  ask(it) {
+    const noun = mediaNoun(it);
+    const q = noun === 'música'
+      ? `Quer que eu toque ${it.caption ? `“${it.caption}”` : 'a música'}?`
+      : `Quer que eu reproduza o vídeo${it.caption ? ` “${it.caption}”` : ''}?`;
+    this.pending = { it, at: Date.now() };
+    if (talk.on) talk.announce(q);
+    else { addMessage('bot', q); if (ttsOn) speaker.say(q); }
+    history.push({ role: 'assistant', content: q });
+  },
+  // 'yes' | 'no' | 'unclear' | null (a mensagem não é uma resposta à pergunta)
+  check(text) {
+    if (!this.pending) return null;
+    if (Date.now() - this.pending.at > 5 * 60_000 || mediaEl.hidden) { this.clear(); return null; }
+    const t = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                  .replace(/[^a-z0-9 ]+/g, ' ').replace(/\b(jarvis|ah|eh|hum|entao|olha)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = t ? t.split(' ') : [];
+    let answer = NO_RE.test(t) ? 'no' : YES_RE.test(t) ? 'yes' : null;
+    // Respostas de uma palavra que a transcrição distorceu ("sinta", "sin", "nã")
+    if (!answer && words.length === 1) {
+      if (/^si\w{0,3}$|^ss+$/.test(words[0])) answer = 'yes';
+      else if (/^na\w{0,2}$|^no\w?$/.test(words[0])) answer = 'no';
+    }
+    if (!answer && words.length <= 2 && !this.pending.retried) { this.pending.retried = true; return 'unclear'; }
+    if (answer === 'no') { this.clear(); mediaBox.hideAsk(); }
+    if (answer === 'yes') this.clear();
+    if (!answer) this.clear();          // mudou de assunto: segue a conversa normal
+    return answer;
+  },
+  unclearText() {
+    return this.pending && mediaNoun(this.pending.it) === 'música'
+      ? 'Não entendi. Quer que eu toque a música? Responda sim ou não.'
+      : 'Não entendi. Quer que eu reproduza o vídeo? Responda sim ou não.';
+  },
+  declineText() { return 'Tudo bem. Fica aqui na caixa se quiser ver depois.'; },
+  clear() { this.pending = null; },
+};
+document.getElementById('mediaPrev').onclick = () => mediaBox.step(-1);
+document.getElementById('mediaNext').onclick = () => mediaBox.step(1);
+document.getElementById('mediaClose').onclick = () => mediaBox.close();
+document.getElementById('mediaBig').onclick = () => mediaEl.classList.toggle('big');
+addEventListener('keydown', ev => {
+  if (mediaEl.hidden || talk.on || ev.target.closest?.('textarea, input')) return;
+  if (ev.key === 'Escape') { mediaEl.classList.contains('big') ? mediaEl.classList.remove('big') : mediaBox.close(); }
+  if (ev.key === 'ArrowLeft') mediaBox.step(-1);
+  if (ev.key === 'ArrowRight') mediaBox.step(1);
+});
+
+/* =====================================================================
+   Legenda + inicialização
+   ===================================================================== */
+document.getElementById('legend').innerHTML = '<div class="legend-title">REAÇÕES</div>' +
+  LEGEND.map(k => `<span><i style="color:${PALETTES[k].hot};background:radial-gradient(circle at 35% 35%, ${PALETTES[k].hot}, ${PALETTES[k].deep})"></i>${PALETTES[k].label}</span>`).join('');
+
+// Gancho para depuração/automação: window.jarvisGalaxy.setState('tool')
+window.jarvisGalaxy = { setState, emitWave, talk, mediaBox, parseReply, history };
+
+requestAnimationFrame(frame);
+setState('thinking');
+Promise.all([loadModel(), loadGraph()]).then(() => {
+  setState('idle');
+  emitWave(1.5);
+});
+setInterval(() => { if (!busy) loadGraph(); }, 60000);
+input.focus();
+</script>
+</body>
+</html>
