@@ -1,0 +1,66 @@
+# Local LLM — everything runs on this computer, no cloud calls
+# Copy to ~/.openjarvis/config.toml, or run:
+#   jarvis init --preset local-llm --force
+#   ./scripts/launch-local.sh            # auto-detects the running local server
+#
+# Supported local servers (pick one, start it, then set [engine] default):
+#   ollama    → `ollama serve`                          http://localhost:11434
+#   lmstudio  → LM Studio "Local Server" tab            http://localhost:1234
+#   llamacpp  → `llama-server -m model.gguf --port 8080` http://localhost:8080
+#
+# Usage:
+#   jarvis ask "Explique computação quântica"
+#   jarvis chat                  # interactive chat session
+#   jarvis serve                 # API server for the browser/desktop app
+
+[engine]
+default = "ollama"
+# default = "lmstudio"
+# default = "llamacpp"
+
+[engine.ollama]
+host = "http://localhost:11434"
+
+[engine.lmstudio]
+host = "http://localhost:1234"
+
+[engine.llamacpp]
+host = "http://localhost:8080"
+
+[intelligence]
+# Must match a model your local server has loaded (`ollama list`).
+# Rough sizing by RAM/VRAM:  8 GB → qwen3.5:2b   16 GB → qwen3.5:4b
+#                           24 GB+ → qwen3.5:9b  (or llama3.1:8b, gemma3:12b)
+default_model = "qwen3.5:4b"
+provider = "local"
+temperature = 0.7
+max_tokens = 2048
+
+[agent]
+# "simple" works with any model. Switch to "orchestrator" for tool use
+# with models that support function calling (qwen3.5, llama3.1+).
+default_agent = "simple"
+max_turns = 10
+tools = "calculator,think,file_read"
+
+[tools.storage]
+default_backend = "sqlite"
+db_path = "~/.openjarvis/memory.db"
+
+[learning]
+enabled = false
+
+[telemetry]
+enabled = true
+db_path = "~/.openjarvis/telemetry.db"
+gpu_metrics = false
+
+[traces]
+enabled = true
+db_path = "~/.openjarvis/traces.db"
+
+[server]
+# Loopback only: the API is not exposed to the local network.
+host = "127.0.0.1"
+port = 8000
+agent = "simple"

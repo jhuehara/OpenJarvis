@@ -61,6 +61,8 @@ jarvis init --preset <name> --force  # replace config with a starter preset
 
 > Prefix `jarvis ...` with `uv run`, or `source .venv/bin/activate` first.
 
+> **Local LLM only:** `./scripts/launch-local.sh` detects a running Ollama / LM Studio / llama.cpp server, picks an installed model and starts chatting — no cloud calls. Guia em português: [LLM_LOCAL.md](LLM_LOCAL.md).
+
 | Preset | What it does |
 |---|---|
 | `morning-digest-mac` / `morning-digest-linux` / `morning-digest-minimal` | Spoken daily briefing from email, calendar, health, news |
@@ -68,6 +70,7 @@ jarvis init --preset <name> --force  # replace config with a starter preset
 | `code-assistant` | Agent with code execution, file I/O, and shell access |
 | `scheduled-monitor` | Stateful agent on a schedule with memory |
 | `chat-simple` | Lightweight conversation, no tools |
+| `local-llm` | Local-only setup (Ollama / LM Studio / llama.cpp), no cloud calls |
 
 Example:
 
