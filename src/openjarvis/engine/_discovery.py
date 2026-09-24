@@ -30,6 +30,9 @@ _HOST_MAP: Dict[str, str | None] = {
     "gemma_cpp": None,
     # In-process: drives the Apple FM SDK directly, so there is no host.
     "afm": None,
+    # CLI-backed: run the local ``claude`` / ``codex`` binaries.
+    "claude_code": None,
+    "codex": None,
 }
 
 
@@ -62,6 +65,19 @@ def _make_engine(key: str, config: JarvisConfig) -> InferenceEngine:
             guardrails=cfg.guardrails,
             sampling=cfg.sampling,
         )
+
+    # claude_code / codex: configured by binary and workspace, not a host
+    if key in ("claude_code", "codex"):
+        cfg = getattr(config.engine, key)
+        kwargs: Dict[str, Any] = {
+            "binary": cfg.binary,
+            "timeout": cfg.timeout,
+            "workspace": cfg.workspace,
+            "extra_args": cfg.extra_args,
+        }
+        if key == "claude_code":
+            kwargs["tools"] = cfg.tools
+        return cls(**kwargs)
 
     host_attr = _HOST_MAP.get(key)
     if host_attr is not None:

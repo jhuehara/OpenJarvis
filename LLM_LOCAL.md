@@ -1,17 +1,39 @@
-# Rodando o OpenJarvis com o LLM local do computador
+# Usando o Claude Code ou o Codex do seu computador no OpenJarvis
 
-Este guia configura o OpenJarvis para usar **somente** um modelo rodando na sua
-máquina — nenhuma chamada a APIs na nuvem, nenhuma chave de API necessária.
+O OpenJarvis pode usar como "cérebro" o **Claude Code** ou o **Codex CLI** que
+você já tem instalado e logado. Ele chama o CLI (`claude -p` / `codex exec`) e
+reaproveita o seu login — assinatura Claude Pro/Max ou ChatGPT Plus/Pro —, então
+**não é preciso API key**.
 
-## 1. Instale um servidor de LLM local
+> O processamento continua nos servidores da Anthropic/OpenAI (é o mesmo que
+> acontece quando você usa o Claude Code ou o Codex). Se quiser um modelo 100%
+> offline, veja [Modelos offline](#modelos-offline-ollama-lm-studio-llamacpp).
 
-Escolha **um** dos servidores abaixo:
+## 1. Deixe o CLI instalado e logado
 
-| Servidor | Como iniciar | Endereço padrão |
-|---|---|---|
-| **Ollama** (recomendado) | instale em <https://ollama.com/download> e rode `ollama serve` | `http://localhost:11434` |
-| **LM Studio** | aba *Developer / Local Server* → *Start Server* com um modelo carregado | `http://localhost:1234` |
-| **llama.cpp** | `llama-server -m modelo.gguf --port 8080` | `http://localhost:8080` |
+**Claude Code** — se `claude --version` não funcionar no terminal (o app desktop sozinho não basta), instale o CLI:
+
+```bash
+# macOS / Linux / WSL
+curl -fsSL https://claude.ai/install.sh | bash
+# Windows (PowerShell)
+irm https://claude.ai/install.ps1 | iex
+
+claude          # abra uma vez e faça login com sua conta Claude
+```
+
+**Codex**:
+
+```bash
+npm install -g @openai/codex
+codex login     # login com sua conta ChatGPT
+```
+
+Confira: `claude --version` ou `codex --version` precisa funcionar no terminal.
+
+> ⚠️ Se a variável `ANTHROPIC_API_KEY` (ou `OPENAI_API_KEY` para o Codex)
+> estiver definida, o CLI pode cobrar por essa chave em vez da sua assinatura.
+> Remova-a com `unset ANTHROPIC_API_KEY` se quiser usar só a assinatura.
 
 ## 2. Instale o OpenJarvis
 
@@ -23,43 +45,70 @@ source .venv/bin/activate
 ## 3. Inicie com um comando
 
 ```bash
-./scripts/launch-local.sh                 # detecta o servidor e o modelo e abre o chat
-./scripts/launch-local.sh qwen3.5:9b      # escolhe o modelo
-./scripts/launch-local.sh -- serve        # sobe a API (http://127.0.0.1:8000) p/ o app web/desktop
-./scripts/launch-local.sh -- ask "Olá!"   # pergunta única
+./scripts/launch-local.sh                    # usa o Claude Code (ou o Codex, se só ele existir)
+./scripts/launch-local.sh claudecode:opus    # Claude Code com um modelo específico
+./scripts/launch-local.sh codex              # força o Codex
+./scripts/launch-local.sh -- serve           # sobe a API (http://127.0.0.1:8000) p/ o app web/desktop
+./scripts/launch-local.sh -- ask "Olá!"      # pergunta única
 ```
 
-O script:
+O script procura, nesta ordem: `claude` → `codex` → Ollama → LM Studio →
+llama.cpp, grava `~/.openjarvis/local-llm.toml` e roda o `jarvis` com ele.
+Para escolher o backend: `LOCAL_LLM_ENGINE=codex ./scripts/launch-local.sh`.
 
-1. Procura um servidor local rodando (Ollama → LM Studio → llama.cpp). Se nenhum
-   estiver ativo mas o `ollama` estiver instalado, ele inicia o `ollama serve`.
-2. Usa o primeiro modelo de chat já instalado. No Ollama, se não houver nenhum,
-   baixa um modelo inicial conforme a RAM: `qwen3.5:2b` (<12 GB),
-   `qwen3.5:4b` (12–23 GB) ou `qwen3.5:9b` (24 GB+).
-3. Cria `~/.openjarvis/local-llm.toml` (só na primeira vez) apontando para o
-   servidor local e roda o `jarvis` com essa configuração.
-
-Variáveis opcionais: `LOCAL_LLM_ENGINE` (`ollama`, `lmstudio`, `llamacpp`),
-`OLLAMA_HOST`, `LMSTUDIO_HOST`, `LLAMACPP_HOST` e `OPENJARVIS_CONFIG`.
-
-## Alternativa: configuração permanente
-
-Para que o `jarvis` puro (sem o script) use o LLM local:
+## Configuração permanente (sem o script)
 
 ```bash
-jarvis init --preset local-llm --force   # grava ~/.openjarvis/config.toml
-ollama pull qwen3.5:4b                   # o modelo definido no preset
-jarvis                                   # chat
+jarvis init --preset claude-code --force   # ou: --preset codex
+jarvis                                     # chat
 ```
 
-Edite `~/.openjarvis/config.toml` para trocar o servidor (`[engine] default`) ou
-o modelo (`[intelligence] default_model`). O modelo precisa estar carregado no
-servidor (`ollama list` mostra os instalados).
+Isso grava `~/.openjarvis/config.toml`. Opções principais:
 
-## Dicas
+```toml
+[engine]
+default = "claude_code"          # ou "codex"
 
-- `jarvis doctor` verifica se o servidor e o modelo estão acessíveis.
-- O agente padrão do preset é `simple` (funciona com qualquer modelo). Para usar
-  ferramentas, troque para `orchestrator` em `[agent] default_agent` — exige um
-  modelo com suporte a *function calling* (ex.: `qwen3.5`, `llama3.1`).
-- A API fica em `127.0.0.1` (só acessível desta máquina).
+[engine.claude_code]
+binary = "claude"                # caminho do CLI, se não estiver no PATH
+timeout = 300                    # segundos por resposta
+tools = ""                       # "" = só conversa; ex.: "WebSearch,WebFetch"
+
+[intelligence]
+default_model = "claudecode"     # claudecode | claudecode:sonnet | :opus | :haiku
+                                 # codex | codex:<modelo>
+```
+
+Você também pode trocar na hora: `jarvis chat --engine codex --model codex`.
+
+## Como funciona
+
+- Engines novos em `src/openjarvis/engine/cli_agents.py`: `claude_code` e `codex`.
+- Cada mensagem vira uma chamada ao CLI; o histórico da conversa e o prompt de
+  sistema do Jarvis são enviados juntos. O Claude Code transmite a resposta em
+  tempo real (streaming).
+- O Claude Code roda sem ferramentas por padrão (`tools = ""`) e o Codex roda com
+  sandbox somente leitura, ambos na pasta `~/.openjarvis/cli_workspace`.
+- Funciona com `jarvis ask`, `jarvis chat` e com a API `jarvis serve`
+  (compatível com OpenAI), usada pelo frontend e pelo app desktop.
+- Use o agente `simple` (padrão dos presets). Os agentes com ferramentas do
+  OpenJarvis (`orchestrator`, etc.) dependem de *function calling*, que os CLIs
+  não expõem.
+- Cada resposta leva alguns segundos a mais que uma API direta, porque o CLI é
+  iniciado a cada mensagem.
+
+## Modelos offline (Ollama, LM Studio, llama.cpp)
+
+Para rodar sem internet, instale o [Ollama](https://ollama.com/download) (ou
+inicie o servidor do LM Studio na porta 1234 / `llama-server` na porta 8080) e
+use `./scripts/launch-local.sh qwen3.5:4b` ou `jarvis init --preset local-llm --force`.
+Se não houver modelo no Ollama, o script baixa um adequado à sua RAM.
+
+## Problemas comuns
+
+- **`'claude' CLI not found`** — o CLI não está no PATH; instale conforme o
+  passo 1 ou defina `binary = "/caminho/para/claude"` na config.
+- **`Not logged in` / erro de autenticação** — rode `claude` (ou `codex login`)
+  no terminal uma vez e faça login.
+- **Timeout** — aumente `timeout` em `[engine.claude_code]` / `[engine.codex]`.
+- `jarvis doctor` mostra quais engines estão disponíveis.
