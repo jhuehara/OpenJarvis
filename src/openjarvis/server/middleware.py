@@ -18,7 +18,8 @@ def create_security_middleware() -> Any:
     - X-XSS-Protection: 1; mode=block
     - Strict-Transport-Security: max-age=31536000; includeSubDomains
     - Referrer-Policy: strict-origin-when-cross-origin
-    - Permissions-Policy: camera=(), microphone=(), geolocation=()
+    - Permissions-Policy: camera=(), microphone=(self), geolocation=()
+      (microphone stays same-origin only: the UI's voice input needs it)
 
     OPTIONS requests are passed through without headers so that
     CORS preflight is not blocked.
@@ -45,11 +46,14 @@ def create_security_middleware() -> Any:
                 "max-age=31536000; includeSubDomains"
             )
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Permissions-Policy"] = (
-                "camera=(), microphone=(), geolocation=()"
-            )
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self' 'unsafe-inline' 'unsafe-eval'"
+            response.headers["Permissions-Policy"] = SECURITY_HEADERS[
+                "Permissions-Policy"
+            ]
+            # A route may ship a stricter/wider page-specific CSP (e.g. /galaxy
+            # needs external media); only fill in the default when it did not.
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                SECURITY_HEADERS["Content-Security-Policy"],
             )
             return response
 
@@ -63,6 +67,6 @@ SECURITY_HEADERS = {
     "X-XSS-Protection": "1; mode=block",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
     "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval'",
 }
