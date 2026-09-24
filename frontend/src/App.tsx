@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
 import { ChatPage } from './pages/ChatPage';
@@ -16,6 +16,8 @@ import { fetchModels, fetchServerInfo, fetchSavings, submitSavings, isTauri } fr
 import { OptInModal } from './components/OptInModal';
 import { UpdateChecker } from './components/Desktop/UpdateChecker';
 import { track, hashId } from './lib/analytics';
+
+const DroneShowPage = lazy(() => import('./pages/DroneShowPage'));
 
 export default function App() {
   const [setupDone, setSetupDone] = useState(!isTauri());
@@ -191,6 +193,14 @@ export default function App() {
           <Route path="agents" element={<AgentsPage />} />
           <Route path="logs" element={<LogsPage />} />
         </Route>
+        <Route
+          path="show"
+          element={
+            <Suspense fallback={<div className="fixed inset-0 bg-black" />}>
+              <DroneShowPage />
+            </Suspense>
+          }
+        />
       </Routes>
       <Toaster position="bottom-right" />
       {commandPaletteOpen && <CommandPalette />}

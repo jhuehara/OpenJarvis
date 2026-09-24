@@ -97,6 +97,34 @@ Você também pode trocar na hora: `jarvis chat --engine codex --model codex`.
 - Cada resposta leva alguns segundos a mais que uma API direta, porque o CLI é
   iniciado a cada mensagem.
 
+## Interface visual: Jarvis Sky Show (voz + show de drones)
+
+Com o servidor rodando, abra **http://127.0.0.1:8000/show** (ou "Drone Show" na
+barra lateral do app). É uma tela cheia com um show de drones 3D sobre uma
+cidade à noite, que reage ao que você pede:
+
+```bash
+./scripts/launch-local.sh -- serve     # depois abra http://127.0.0.1:8000/show
+```
+
+- **Digite ou fale**: clique no microfone (ou aperte a barra de espaço) e fale
+  em português. A resposta do Jarvis aparece como legenda e é falada em voz alta.
+- **Os drones executam o pedido**: “mostre um coração azul”, “escreva OLÁ
+  MUNDO”, “faça fogos de artifício”, “que horas são?”, “desenhe um gato 🐱”…
+  O modelo escolhe a formação (coração, estrela, planeta, galáxia, DNA, cubo,
+  toro, onda, texto, relógio, fogos ou **qualquer emoji**, desenhado com as
+  cores dele) e comandos simples reagem na hora, antes mesmo da resposta.
+- **Estados visíveis**: anéis do logo pulsando com a sua voz enquanto ouve,
+  giro acelerado enquanto pensa e batidas no ritmo da fala enquanto responde.
+- **Controles**: modelo, quantidade de drones (800 a 4000), resposta falada
+  liga/desliga, conversa contínua (volta a ouvir sozinho após cada resposta) e
+  tela cheia. Arraste para girar a câmera e use a roda do mouse para zoom.
+
+Requisitos: navegador com WebGL. O reconhecimento de voz usa o do navegador
+(Chrome, Edge ou Safari); em outros navegadores, usa a transcrição do servidor
+OpenJarvis, se estiver configurada. Para desenvolver a interface:
+`cd frontend && npm ci && npm run dev` (abre em http://localhost:5173/show).
+
 ## Modelos offline (Ollama, LM Studio, llama.cpp)
 
 Para rodar sem internet, instale o [Ollama](https://ollama.com/download) (ou

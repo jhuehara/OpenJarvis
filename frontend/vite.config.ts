@@ -52,6 +52,7 @@ export default defineConfig({
             },
             { name: 'charts', test: /node_modules[\\/]recharts[\\/]/ },
             { name: 'router', test: /node_modules[\\/]react-router[\\/]/ },
+            { name: 'three', test: /node_modules[\\/]three[\\/]/ },
           ],
         },
       },

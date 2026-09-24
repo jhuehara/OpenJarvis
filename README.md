@@ -61,7 +61,7 @@ jarvis init --preset <name> --force  # replace config with a starter preset
 
 > Prefix `jarvis ...` with `uv run`, or `source .venv/bin/activate` first.
 
-> **Use the AI already on your computer:** `./scripts/launch-local.sh` runs Jarvis on your logged-in Claude Code (`claude`) or Codex CLI — no API key — or on a local Ollama / LM Studio / llama.cpp server. Guia em português: [LLM_LOCAL.md](LLM_LOCAL.md).
+> **Use the AI already on your computer:** `./scripts/launch-local.sh` runs Jarvis on your logged-in Claude Code (`claude`) or Codex CLI — no API key — or on a local Ollama / LM Studio / llama.cpp server. Guia em português: [LLM_LOCAL.md](LLM_LOCAL.md). Open `/show` on the server for **Jarvis Sky Show**, a voice + text interface where a realistic 3D drone light show acts out your requests.
 
 | Preset | What it does |
 |---|---|
