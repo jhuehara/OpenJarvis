@@ -1,0 +1,33 @@
+# Codex — use the OpenAI Codex CLI already logged in on this computer
+# Copy to ~/.openjarvis/config.toml, or run:
+#   jarvis init --preset codex --force
+#
+# Requires the `codex` CLI on PATH (npm install -g @openai/codex), logged in
+# once with `codex login`. It reuses that login (ChatGPT plan or API key), so
+# OpenJarvis needs no key of its own. Codex runs in a read-only sandbox.
+#
+# Usage:
+#   jarvis ask "Resuma as novidades de hoje"
+#   jarvis chat
+#   jarvis serve                 # API server for the browser/desktop app
+
+[engine]
+default = "codex"
+
+[engine.codex]
+binary = "codex"                   # or a full path to the CLI
+timeout = 300                      # seconds per request
+# workspace = "~/.openjarvis/cli_workspace"   # CLI working directory
+# extra_args = "--config model_reasoning_effort=low"
+
+[intelligence]
+# "codex" = the CLI's default model; or codex:<model>, e.g. codex:gpt-5-codex
+default_model = "codex"
+
+[agent]
+default_agent = "simple"
+
+[server]
+host = "127.0.0.1"
+port = 8000
+agent = "simple"

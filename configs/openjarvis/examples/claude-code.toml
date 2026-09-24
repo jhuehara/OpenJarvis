@@ -1,0 +1,36 @@
+# Claude Code — use the Claude Code CLI already logged in on this computer
+# Copy to ~/.openjarvis/config.toml, or run:
+#   jarvis init --preset claude-code --force
+#
+# Requires the `claude` CLI on PATH, logged in once (run `claude` and sign in).
+# It reuses that login (Claude Pro/Max subscription or Console account), so
+# OpenJarvis needs no API key. If ANTHROPIC_API_KEY is set in your shell, the
+# CLI bills that key instead of your subscription.
+#
+# Usage:
+#   jarvis ask "Resuma as novidades de hoje"
+#   jarvis chat
+#   jarvis serve                 # API server for the browser/desktop app
+
+[engine]
+default = "claude_code"
+
+[engine.claude_code]
+binary = "claude"                  # or a full path to the CLI
+timeout = 300                      # seconds per request
+# workspace = "~/.openjarvis/cli_workspace"   # CLI working directory
+# Built-in Claude Code tools to enable; empty = plain chat, no tools.
+tools = ""
+# tools = "WebSearch,WebFetch"
+
+[intelligence]
+# "claudecode" = the CLI's default model; or claudecode:sonnet / :opus / :haiku
+default_model = "claudecode"
+
+[agent]
+default_agent = "simple"
+
+[server]
+host = "127.0.0.1"
+port = 8000
+agent = "simple"

@@ -61,6 +61,8 @@ jarvis init --preset <name> --force  # replace config with a starter preset
 
 > Prefix `jarvis ...` with `uv run`, or `source .venv/bin/activate` first.
 
+> **Use the AI already on your computer:** `./scripts/launch-local.sh` runs Jarvis on your logged-in Claude Code (`claude`) or Codex CLI — no API key — or on a local Ollama / LM Studio / llama.cpp server. Guia em português: [LLM_LOCAL.md](LLM_LOCAL.md).
+
 | Preset | What it does |
 |---|---|
 | `morning-digest-mac` / `morning-digest-linux` / `morning-digest-minimal` | Spoken daily briefing from email, calendar, health, news |
@@ -68,6 +70,8 @@ jarvis init --preset <name> --force  # replace config with a starter preset
 | `code-assistant` | Agent with code execution, file I/O, and shell access |
 | `scheduled-monitor` | Stateful agent on a schedule with memory |
 | `chat-simple` | Lightweight conversation, no tools |
+| `claude-code` / `codex` | Use your logged-in Claude Code or Codex CLI as the model, no API key |
+| `local-llm` | Local-only setup (Ollama / LM Studio / llama.cpp), no cloud calls |
 
 Example:
 

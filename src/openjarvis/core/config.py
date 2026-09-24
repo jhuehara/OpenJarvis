@@ -474,6 +474,30 @@ class LemonadeEngineConfig:
     host: str = "http://localhost:13305"
 
 
+@dataclass(slots=True)
+class ClaudeCodeEngineConfig:
+    """Per-engine config for the Claude Code CLI (``claude -p``)."""
+
+    binary: str = "claude"
+    timeout: int = 300
+    # Working directory for the CLI (default ~/.openjarvis/cli_workspace).
+    workspace: str = ""
+    # Built-in Claude Code tools to enable, e.g. "WebSearch,WebFetch".
+    # Empty = plain chat with no tools.
+    tools: str = ""
+    extra_args: str = ""
+
+
+@dataclass(slots=True)
+class CodexEngineConfig:
+    """Per-engine config for the OpenAI Codex CLI (``codex exec``)."""
+
+    binary: str = "codex"
+    timeout: int = 300
+    workspace: str = ""
+    extra_args: str = ""
+
+
 @dataclass
 class EngineConfig:
     """Inference engine settings with nested per-engine configs."""
@@ -492,6 +516,8 @@ class EngineConfig:
     afm: AfmEngineConfig = field(default_factory=AfmEngineConfig)
     gemma_cpp: GemmaCppEngineConfig = field(default_factory=GemmaCppEngineConfig)
     lemonade: LemonadeEngineConfig = field(default_factory=LemonadeEngineConfig)
+    claude_code: ClaudeCodeEngineConfig = field(default_factory=ClaudeCodeEngineConfig)
+    codex: CodexEngineConfig = field(default_factory=CodexEngineConfig)
 
     # Backward-compat properties for old flat attribute names
     @property
