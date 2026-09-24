@@ -183,3 +183,16 @@ def test_faster_whisper_supported_formats():
         assert "wav" in formats
         assert "mp3" in formats
         assert "webm" in formats
+
+
+def test_faster_whisper_transcribe_skips_silence_and_loops():
+    """Silence-heavy clips must not trigger long hallucination retries."""
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([], MagicMock(language="pt", duration=1.0))
+    backend = FasterWhisperBackend()
+    with patch.object(backend, "_ensure_model", return_value=mock_model):
+        backend.transcribe(b"fake audio bytes", language="pt")
+    kwargs = mock_model.transcribe.call_args.kwargs
+    assert kwargs["vad_filter"] is True
+    assert kwargs["condition_on_previous_text"] is False
+    assert kwargs["language"] == "pt"
