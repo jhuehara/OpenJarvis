@@ -1264,6 +1264,40 @@ class TracesConfig:
 
 
 @dataclass(slots=True)
+class DevTaskProject:
+    """A repository dev-task agents may work in (``[[devtasks.projects]]``)."""
+
+    name: str = ""
+    path: str = ""  # absolute path to the git checkout
+    base_branch: str = "main"  # branch new task branches start from
+    pr_base: str = ""  # PR target ("" = base_branch)
+    test_cmd: str = ""  # command prefix the agent may run to test, e.g. "pytest"
+    description: str = ""
+    env: Dict[str, str] = field(default_factory=dict)  # extra env for the agent
+
+
+@dataclass(slots=True)
+class DevTasksConfig:
+    """Delegated development tasks run by coding agents (``[devtasks]``)."""
+
+    enabled: bool = True
+    max_concurrent: int = 1
+    timeout_s: int = 1800
+    budget_usd: float = 5.0  # per task (claude --max-budget-usd)
+    daily_budget_usd: float = 30.0
+    model: str = "opus"
+    claude_binary: str = "claude"
+    git_author_name: str = "Jarvis"
+    git_author_email: str = "jarvis@openjarvis.local"
+    worktree_root: str = field(
+        default_factory=lambda: str(get_config_dir() / "worktrees")
+    )
+    reports_dir: str = field(default_factory=lambda: str(get_config_dir() / "reports"))
+    db_path: str = field(default_factory=lambda: str(get_config_dir() / "tasks.db"))
+    projects: List[DevTaskProject] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ProactiveConfig:
     """Proactive agent — autonomous action scheduling and approval routing."""
 
@@ -1818,6 +1852,7 @@ class JarvisConfig:
     skills: SkillsConfig = field(default_factory=SkillsConfig)
     digest: DigestConfig = field(default_factory=DigestConfig)
     proactive: ProactiveConfig = field(default_factory=ProactiveConfig)
+    devtasks: DevTasksConfig = field(default_factory=DevTasksConfig)
     mining: Optional["MiningConfig"] = None
 
     @property
@@ -2133,6 +2168,7 @@ def load_config(path: Optional[Path] = None) -> JarvisConfig:
             "system_prompt",
             "compression",
             "skills",
+            "devtasks",
         )
         for section_name in top_sections:
             if section_name in data:

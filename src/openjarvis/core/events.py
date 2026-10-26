@@ -76,6 +76,8 @@ class EventType(str, Enum):
     AGENT_LEARNING_COMPLETED = "agent_learning_completed"
     AGENT_MESSAGE_RECEIVED = "agent_message_received"
     AGENT_CHECKPOINT_SAVED = "agent_checkpoint_saved"
+    DEVTASK_UPDATED = "devtask_updated"
+    DEVTASK_EVENT = "devtask_event"
     # Phase 25 — Configuration Optimization
     OPTIMIZE_RUN_START = "optimize_run_start"
     OPTIMIZE_TRIAL_START = "optimize_trial_start"

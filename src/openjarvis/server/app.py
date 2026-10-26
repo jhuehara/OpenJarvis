@@ -496,6 +496,12 @@ def create_app(
     app.include_router(dashboard_router)
     app.include_router(comparison_router)
     app.include_router(galaxy_router)
+    try:
+        from openjarvis.server.devtask_routes import setup_devtasks
+
+        setup_devtasks(app)
+    except Exception as exc:  # noqa: BLE001 — tasks are optional
+        logger.warning("Dev tasks init skipped: %s", exc)
     app.include_router(create_connectors_router())
     app.include_router(create_digest_router())
     app.include_router(upload_router)

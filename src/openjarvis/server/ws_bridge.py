@@ -28,6 +28,8 @@ _AGENT_EVENTS = {
     EventType.TOOL_CALL_END,
     EventType.INFERENCE_START,
     EventType.INFERENCE_END,
+    EventType.DEVTASK_UPDATED,
+    EventType.DEVTASK_EVENT,
 }
 
 

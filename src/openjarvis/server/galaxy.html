@@ -114,6 +114,108 @@
 
   .toggle-chat { display: none; }
 
+  /* ---------- Agentes: indicador discreto ---------- */
+  .tasks-hud { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; pointer-events: auto; max-width: 340px; }
+  .tasks-hud:empty { display: none; }
+  .th-line {
+    display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 3px 8px 3px 0;
+    font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .2s;
+    animation: th-in .4s ease;
+  }
+  .th-line:hover { color: var(--text); }
+  .th-line b { color: var(--text); font-weight: 500; }
+  .th-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--c, #39d0ff); box-shadow: 0 0 8px var(--c, #39d0ff); }
+  .th-line.running .th-dot { animation: pulse 1.6s ease-in-out infinite; }
+  .th-line.awaiting_approval { color: #ffcf6e; }
+  .th-step { overflow: hidden; text-overflow: ellipsis; transition: opacity .3s; }
+  @keyframes th-in { from { opacity: 0; transform: translateX(-6px); } }
+
+  /* ---------- Avisos (toasts) ---------- */
+  .toasts { position: fixed; z-index: 9; top: 18px; right: calc(min(410px, 100vw - 36px) + 36px); display: flex; flex-direction: column; gap: 8px; width: min(320px, 40vw); pointer-events: none; }
+  .toast {
+    pointer-events: auto; background: rgba(7, 10, 16, .92); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--accent));
+    border-radius: 10px; padding: 10px 12px; font-size: 13.5px; line-height: 1.35; color: var(--text);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    animation: toast-in .35s ease; cursor: pointer;
+  }
+  .toast small { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--c, var(--accent)); text-transform: uppercase; margin-bottom: 2px; }
+  .toast .t-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .toast.hide { opacity: 0; transform: translateY(-6px); transition: all .3s; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }
+  .confirm-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .pill-btn {
+    border: 1px solid rgba(var(--accent-rgb), .55); background: transparent; color: var(--text); border-radius: 999px;
+    padding: 5px 12px; font: 600 12px var(--display); letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+  }
+  .pill-btn.primary { background: var(--accent); color: #0b0b0b; border-color: var(--accent); }
+  .pill-btn.danger { border-color: rgba(255, 90, 74, .7); color: #ffb4a8; }
+  .pill-btn:disabled { opacity: .45; cursor: default; }
+  .tasks-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; border-radius: 8px; background: #39d0ff; color: #001018; font: 700 10px var(--mono); display: grid; place-items: center; padding: 0 4px; }
+  .tasks-badge:empty { display: none; }
+  #actBtn { position: relative; }
+
+  /* ---------- Visão de Atividades ---------- */
+  .activity {
+    position: fixed; inset: 14px; z-index: 8; display: flex; flex-direction: column;
+    background: rgba(5, 8, 13, .86); border: 1px solid var(--line); border-radius: 16px;
+    backdrop-filter: blur(18px) saturate(1.1); -webkit-backdrop-filter: blur(18px) saturate(1.1);
+    box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: media-in .35s ease;
+  }
+  .activity[hidden] { display: none; }
+  .act-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .act-head h2 { font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); flex: 1; }
+  .act-head span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .act-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; }
+  .act-list { border-right: 1px solid var(--line); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .act-card { border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; cursor: pointer; background: rgba(255,255,255,.025); transition: all .15s; }
+  .act-card:hover { background: rgba(255,255,255,.05); }
+  .act-card.sel { border-color: rgba(var(--accent-rgb), .55); background: rgba(var(--accent-rgb), .08); }
+  .act-card .ac-top { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: .06em; }
+  .act-card .ac-title { font-size: 15px; margin: 4px 0 3px; line-height: 1.25; }
+  .act-card .ac-step { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status-pill { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; color: var(--c); border: 1px solid var(--c); }
+  .act-detail { overflow-y: auto; padding: 18px 22px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .act-detail h3 { font-size: 20px; font-weight: 600; line-height: 1.25; }
+  .act-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .act-meta a { color: var(--accent); }
+  .act-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .act-followup { display: flex; gap: 8px; }
+  .act-followup input { flex: 1; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 9px; color: var(--text); padding: 8px 10px; font: 500 14px var(--display); outline: none; }
+  .act-sec h4 { font-size: 11px; letter-spacing: .25em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .act-now { font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .act-thought { margin-top: 6px; color: #d8cbb4; font-size: 14px; line-height: 1.45; border-left: 2px solid rgba(var(--accent-rgb), .4); padding-left: 10px; white-space: pre-wrap; }
+  .timeline { display: flex; flex-direction: column; gap: 2px; font-family: var(--mono); font-size: 12px; }
+  .tl-row { display: grid; grid-template-columns: 52px 18px 1fr auto; gap: 8px; align-items: baseline; padding: 3px 6px; border-radius: 6px; }
+  .tl-row:hover { background: rgba(255,255,255,.04); }
+  .tl-row time { color: var(--muted); }
+  .tl-row .tl-ic { text-align: center; }
+  .tl-row .tl-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .tl-row .tl-dur { color: var(--muted); }
+  .tl-row.err .tl-txt { color: #ffb4a8; }
+  .tl-row.denied .tl-txt { color: #ffcf6e; }
+  .tl-row.think .tl-txt { color: #d8cbb4; font-family: var(--display); font-size: 13.5px; white-space: normal; }
+  .term { background: #020407; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; padding: 10px 12px; font: 11.5px/1.45 var(--mono); color: #c9d4c3; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+  .term .cmd { color: #8ef2ff; }
+  .files { display: flex; flex-direction: column; gap: 3px; font: 12px var(--mono); }
+  .files button { text-align: left; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; padding: 3px 6px; border-radius: 5px; }
+  .files button:hover { background: rgba(255,255,255,.05); }
+  .diff { background: #020407; border-radius: 10px; padding: 10px; font: 11.5px/1.4 var(--mono); max-height: 380px; overflow: auto; white-space: pre; }
+  .diff .add { color: #7ee787; } .diff .del { color: #ff7b72; } .diff .hunk { color: #79c0ff; }
+  .act-summary { font-size: 15px; line-height: 1.5; color: var(--text); }
+  .act-foot { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .act-foot .grow { flex: 1; }
+  .act-empty { margin: auto; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.6; }
+  .vp-notices { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .vp-notices select { background: rgba(0,0,0,.4); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; font: 500 13px var(--display); }
+  @media (max-width: 760px) {
+    .activity { inset: 0; border-radius: 0; }
+    .act-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .act-list { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    .act-card { min-width: 230px; }
+    .toasts { right: 10px; left: 10px; width: auto; top: 70px; }
+  }
+
   /* ---------- Caixa de mídia ---------- */
   .media {
     position: fixed; left: 22px; bottom: 18px; z-index: 6; width: min(460px, calc(100vw - 490px));
@@ -280,7 +382,28 @@
   <div class="brand">J.A.R.V.I.S.<small>UNIVERSO DE CONHECIMENTO</small></div>
   <div class="state-line"><span class="state-dot"></span><span id="stateLabel">Inicializando</span></div>
   <div class="stats" id="stats">carregando constelações…</div>
+  <div class="tasks-hud" id="tasksHud" aria-live="polite"></div>
 </div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<section class="activity" id="activity" hidden aria-label="Atividades dos agentes">
+  <div class="act-head">
+    <h2>Atividades dos agentes</h2>
+    <span id="actCounts"></span>
+    <button class="icon-btn" id="actClose" aria-label="Fechar" title="Fechar (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="act-body">
+    <aside class="act-list" id="actList"></aside>
+    <main class="act-detail" id="actDetail"></main>
+  </div>
+  <div class="act-foot">
+    <span id="actQueue"></span><span id="actCost"></span><span id="actGh"></span>
+    <span class="grow"></span>
+    <button class="pill-btn danger" id="actKill">Parar tudo</button>
+  </div>
+</section>
 
 <div class="legend" id="legend"></div>
 
@@ -327,6 +450,10 @@
     <button class="icon-btn" id="voiceBtn" title="Escolher a voz do Jarvis" aria-label="Escolher voz" aria-expanded="false" aria-controls="voicePanel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M18.5 6.5a4 4 0 0 1 0 5"/><path d="M21 4a8 8 0 0 1 0 10"/></svg>
     </button>
+    <button class="icon-btn" id="actBtn" title="Atividades dos agentes" aria-label="Atividades dos agentes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="19.5" cy="7" r="1.6" fill="currentColor"/></svg>
+      <span class="tasks-badge" id="actBadge"></span>
+    </button>
     <button class="icon-btn" id="clearBtn" title="Nova conversa" aria-label="Nova conversa">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
     </button>
@@ -341,6 +468,13 @@
       <input type="range" id="vpRate" min="0.7" max="1.5" step="0.05" value="1.05">
     </label>
     <label class="vp-all"><input type="checkbox" id="vpAll"> mostrar vozes de outros idiomas</label>
+    <label class="vp-notices">Avisos falados dos agentes
+      <select id="vpNotices">
+        <option value="all">sempre</option>
+        <option value="approvals">só aprovações</option>
+        <option value="none">nunca</option>
+      </select>
+    </label>
   </div>
   <div class="messages" id="messages">
     <div class="empty" id="empty"><b>SISTEMA ONLINE</b>Converse comigo. Cada estrela é algo que eu sei —<br>as conexões mostram como tudo se relaciona.</div>
@@ -1062,8 +1196,10 @@ function detectEmotion(text) {
    Loop de animação
    ===================================================================== */
 const clock = new THREE.Clock();
+const frameHooks = [];
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), now = performance.now();
+  frameHooks.forEach(h => h(dt, now));
   updateView(dt, now);
   U.uTime.value += dt * view.speed;
 
@@ -1142,6 +1278,8 @@ let downAt = null;
 canvas.addEventListener('pointerdown', ev => { downAt = [ev.clientX, ev.clientY]; });
 canvas.addEventListener('pointerup', ev => {
   if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const sat = satellites.pick(ev);
+  if (sat) { activity.open(sat); return; }
   const i = pick(ev);
   if (i < 0) { detail.classList.remove('show'); return; }
   showDetail(i);
@@ -1261,16 +1399,27 @@ async function loadPersona() {
 }
 function systemPrompt(...extra) {
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
-  return [PERSONA, `Agora é ${now} (horário de Brasília).`, GALAXY_PROMPT, ...extra].filter(Boolean).join('\n\n');
+  return [PERSONA, `Agora é ${now} (horário de Brasília).`, agents.contextText(), GALAXY_PROMPT, ...extra].filter(Boolean).join('\n\n');
 }
 
 function parseReply(text) {
-  let mood = null;
-  const media = [];
+  let mood = null, open = null;
+  const media = [], tasks = [];
   let clean = text.replace(TAG_RE, (_, key, value) => {
     key = key.toLowerCase();
     if (/^emo[cç][aã]o$|^humor$|^mood$/.test(key)) {
       mood = MOODS[value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] ?? MOODS[value.toLowerCase()] ?? mood;
+    } else if (key === 'tarefa') {
+      const parts = value.split('|').map(x => x.trim());
+      const [kind, project] = parts;
+      // tipo | projeto | título | pedido  (o formato antigo, sem título, também vale)
+      const title = parts.length >= 4 ? parts[2] : '';
+      const prompt = parts.slice(parts.length >= 4 ? 3 : 2).join(' | ').trim();
+      const k = (kind || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (prompt) tasks.push({ kind: k.startsWith('rev') ? 'revisao' : k.startsWith('pesq') ? 'pesquisa' : 'codigo', project, title, prompt });
+    } else if (key === 'abrir' || key === 'mostrar') {
+      const [target, focus] = value.split('|').map(x => x.trim());
+      if (/ativid|agente|tarefa/i.test(target)) open = { view: 'atividades', focus: focus || '' };
     } else if (/^(imagem|image|foto|v[ií]deo|video|m[uú]sica|music|[aá]udio|audio)$/.test(key)) {
       const [url, ...cap] = value.split('|');
       const kind = /^(imagem|image|foto)$/.test(key) ? 'image' : /^(m[uú]sica|music|[aá]udio|audio)$/.test(key) ? 'audio' : 'video';
@@ -1281,7 +1430,7 @@ function parseReply(text) {
   clean = clean.replace(MD_IMAGE_RE, (_, alt, url) => { media.push({ kind: 'image', url, caption: alt }); return ''; });
   clean = clean.replace(/\[\[[^\]]*$/, '')            // marcação ainda chegando
                .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { clean, mood, media };
+  return { clean, mood, media, tasks, open };
 }
 
 function setMood(mood) {
@@ -1337,11 +1486,13 @@ function remember(question, answer) {
 function afterReply(question, answer) {
   history.push({ role: 'assistant', content: answer });
   remember(question, answer);
-  const { clean, mood, media } = parseReply(answer);
+  const { clean, mood, media, tasks, open } = parseReply(answer);
   view.mood = mood || detectEmotion(clean);   // sem marcação: lê o tom do texto
   setState(view.mood, 12000);
   illuminate(`${question} ${clean}`, 1.6);
   if (media.length) mediaBox.open(media);
+  if (open) activity.open(open.focus);
+  if (tasks.length) setTimeout(() => agents.proposeDelegation(tasks[0]), 300);
   setTimeout(loadGraph, 1200); // a nova conversa nasce como estrela
   // Resposta só com mídia: ainda assim o Jarvis diz algo
   return clean || (media.length ? (media.length > 1 ? 'Aqui estão.' : 'Aqui está.') : '');
@@ -1350,14 +1501,22 @@ function afterReply(question, answer) {
 async function send(text) {
   text = text.trim();
   if (!text || busy) return;
-  const decision = playPrompt.check(text);
+  const local = await localCommand(text);
+  if (local) {
+    addMessage('user', text); addMessage('bot', local);
+    history.push({ role: 'user', content: text }, { role: 'assistant', content: local });
+    if (ttsOn) speaker.say(local);
+    return;
+  }
+  const decision = confirmPrompt.check(text);
   if (decision) {
     addMessage('user', text);
-    const reply = decision === 'yes' ? mediaBox.play() : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
-    addMessage('bot', reply);
-    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-    if (decision !== 'unclear') remember(text, reply);
-    if (decision !== 'yes' && ttsOn) speaker.say(reply);
+    const r = await confirmPrompt.resolve(decision);
+    addMessage('bot', r.text);
+    history.push({ role: 'user', content: text }, { role: 'assistant', content: r.text });
+    if (decision !== 'unclear') remember(text, r.text);
+    if (r.speak !== false && ttsOn) speaker.say(r.text);
+    r.after?.();
     return;
   }
   busy = true; sendBtn.disabled = true;
@@ -1994,18 +2153,29 @@ const talk = {
       await speaker.drained();
       return this.stop();
     }
-    const decision = playPrompt.check(text);
-    if (decision) {
-      const reply = decision === 'yes' ? 'Reproduzindo.' : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
-      history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-      if (decision === 'yes') remember(text, `Reproduziu “${mediaBox.items[mediaBox.index]?.caption || 'a mídia'}”.`);
-      else if (decision === 'no') remember(text, reply);
-      this.say('bot', reply);
+    const local = await localCommand(text);
+    if (local) {
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: local });
+      this.say('bot', local);
       this.setPhase('busy', 'Jarvis falando…', '');
-      speaker.say(reply);
+      speaker.say(local);
+      await speaker.drained();
+      if (this.on && turn === this.turn) this.listen();
+      return;
+    }
+    const decision = confirmPrompt.check(text);
+    if (decision) {
+      const r = await confirmPrompt.resolve(decision);
+      const spoken = r.speak === false ? r.text.replace(/^▶\s*/, '') : r.text;
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: r.text });
+      if (decision !== 'unclear') remember(text, r.text);
+      this.say('bot', spoken);
+      this.setPhase('busy', 'Jarvis falando…', '');
+      speaker.say(spoken);
       await speaker.drained();
       if (!this.on || turn !== this.turn) return;
-      if (decision === 'yes') { mediaBox.play(); return; }   // play() pausa a escuta
+      r.after?.();
+      if (r.holdListening) return;
       return this.listen();
     }
     await this.reply(text, turn);
@@ -2249,8 +2419,8 @@ const mediaBox = {
         const msg = this.play();
         if (!talk.on) addMessage('bot', msg);
       };
-      mediaStage.querySelector('.play-no').onclick = () => { playPrompt.clear(); this.hideAsk(); };
-      if (ask) playPrompt.ask(it);
+      mediaStage.querySelector('.play-no').onclick = () => { confirmPrompt.clear('media'); this.hideAsk(); };
+      if (ask) confirmPrompt.ask(YES_NO_MEDIA(it));
     }
     this.playing = false;
     mediaCaption.textContent = it.caption;
@@ -2263,7 +2433,7 @@ const mediaBox = {
   // Inicia a mídia atual; devolve a frase de confirmação
   play() {
     const it = this.items[this.index];
-    playPrompt.clear();
+    confirmPrompt.clear('media');
     if (!it || !isPlayable(it)) return 'Não há nada para reproduzir agora.';
     this.hideAsk();
     speaker.stop();                       // a mídia não disputa com a voz do Jarvis
@@ -2303,7 +2473,7 @@ const mediaBox = {
 
   close() {
     this.token++;
-    playPrompt.clear();
+    confirmPrompt.clear('media');
     mediaStage.innerHTML = '';        // para vídeos em reprodução
     this.playing = false;
     mediaEl.hidden = true; mediaEl.classList.remove('big');
@@ -2326,23 +2496,44 @@ function embedUrl(it, autoplay) {
 /* Pergunta "quer que eu reproduza?" e interpreta a resposta (texto ou voz) */
 const YES_RE = /^(sim|s|pode|podes|claro|quero|toca|toque|tocar|reproduz\w*|executa\w*|inicia\w*|comeca|play|bora|vai|manda|ok|okay|isso|por favor|com certeza|aham|uhum|yes|yep|beleza|positivo|afirmativo)\b/;
 const NO_RE = /^(nao|n|agora nao|depois|deixa|no|nope|cancela\w*|negativo|nem)\b/;
-const playPrompt = {
-  pending: null,
-  ask(it) {
-    const noun = mediaNoun(it);
-    const q = noun === 'música'
-      ? `Quer que eu toque ${it.caption ? `“${it.caption}”` : 'a música'}?`
-      : `Quer que eu reproduza o vídeo${it.caption ? ` “${it.caption}”` : ''}?`;
-    this.pending = { it, at: Date.now() };
-    if (talk.on) talk.announce(q);
-    else { addMessage('bot', q); if (ttsOn) speaker.say(q); }
-    history.push({ role: 'assistant', content: q });
+/* Pergunta sim/não (mídia, delegar a um agente, aprovar push/PR) e interpreta
+   a resposta digitada, falada ou pelos botões. */
+const confirmPrompt = {
+  pending: null, last: null,
+  // opts: { question, yes: async () => ({text, after?, speak?, holdListening?}), no: () => ({text}), unclear, valid?, kind }
+  ask(opts) {
+    this.pending = { ...opts, at: Date.now(), retried: false };
+    if (talk.on) talk.announce(opts.question);
+    else {
+      const el = addMessage('bot', opts.question);
+      const row = document.createElement('div');
+      row.className = 'confirm-actions';
+      row.innerHTML = `<button class="pill-btn primary">${opts.yesLabel || 'Sim'}</button><button class="pill-btn">${opts.noLabel || 'Não'}</button>`;
+      const [yesB, noB] = row.querySelectorAll('button');
+      const pending = this.pending;
+      const click = async decision => {
+        yesB.disabled = noB.disabled = true;
+        if (this.pending !== pending) return;
+        this.last = pending; this.pending = null;
+        const r = await this.resolve(decision);
+        addMessage('bot', r.text);
+        history.push({ role: 'assistant', content: r.text });
+        if (r.speak !== false && ttsOn) speaker.say(r.text);
+        r.after?.();
+      };
+      yesB.onclick = () => click('yes');
+      noB.onclick = () => click('no');
+      el.appendChild(row);
+      pending.buttons = row;
+      if (ttsOn) speaker.say(opts.question);
+    }
+    history.push({ role: 'assistant', content: opts.question });
   },
   // 'yes' | 'no' | 'unclear' | null (a mensagem não é uma resposta à pergunta)
   check(text) {
     if (!this.pending) return null;
-    if (Date.now() - this.pending.at > 5 * 60_000 || mediaEl.hidden) { this.clear(); return null; }
-    const t = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    if (Date.now() - this.pending.at > 5 * 60_000 || (this.pending.valid && !this.pending.valid())) { this.clear(); return null; }
+    const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
                   .replace(/[^a-z0-9 ]+/g, ' ').replace(/\b(jarvis|ah|eh|hum|entao|olha)\b/g, ' ').replace(/\s+/g, ' ').trim();
     const words = t ? t.split(' ') : [];
     let answer = NO_RE.test(t) ? 'no' : YES_RE.test(t) ? 'yes' : null;
@@ -2352,19 +2543,46 @@ const playPrompt = {
       else if (/^na\w{0,2}$|^no\w?$/.test(words[0])) answer = 'no';
     }
     if (!answer && words.length <= 2 && !this.pending.retried) { this.pending.retried = true; return 'unclear'; }
-    if (answer === 'no') { this.clear(); mediaBox.hideAsk(); }
-    if (answer === 'yes') this.clear();
-    if (!answer) this.clear();          // mudou de assunto: segue a conversa normal
+    this.last = this.pending;
+    this.pending.buttons?.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    this.pending = null;               // sim, não, ou mudou de assunto
     return answer;
   },
-  unclearText() {
-    return this.pending && mediaNoun(this.pending.it) === 'música'
-      ? 'Não entendi. Quer que eu toque a música? Responda sim ou não.'
-      : 'Não entendi. Quer que eu reproduza o vídeo? Responda sim ou não.';
+  async resolve(decision) {
+    const p = decision === 'unclear' ? this.pending : this.last;
+    if (!p) return { text: 'Tudo bem.' };
+    if (decision === 'unclear') return { text: p.unclear || 'Não entendi. Responda sim ou não.' };
+    try {
+      return decision === 'yes' ? await p.yes() : (p.no ? p.no() : { text: 'Tudo bem.' });
+    } catch (err) {
+      return { text: `Não consegui: ${err.message}` };
+    }
   },
-  declineText() { return 'Tudo bem. Fica aqui na caixa se quiser ver depois.'; },
-  clear() { this.pending = null; },
+  clear(kind) {
+    if (!this.pending || (kind && this.pending.kind !== kind)) return;
+    this.pending.buttons?.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    this.pending = null;
+  },
 };
+const YES_NO_MEDIA = it => ({
+  kind: 'media',
+  question: mediaNoun(it) === 'música'
+    ? `Quer que eu toque ${it.caption ? `“${it.caption}”` : 'a música'}?`
+    : `Quer que eu reproduza o vídeo${it.caption ? ` “${it.caption}”` : ''}?`,
+  yesLabel: mediaNoun(it) === 'música' ? 'Tocar' : 'Reproduzir',
+  noLabel: 'Agora não',
+  valid: () => !mediaEl.hidden,
+  unclear: mediaNoun(it) === 'música'
+    ? 'Não entendi. Quer que eu toque a música? Responda sim ou não.'
+    : 'Não entendi. Quer que eu reproduza o vídeo? Responda sim ou não.',
+  yes: async () => ({
+    text: `▶ Reproduzindo${it.caption ? ` “${it.caption}”` : ''}.`,
+    speak: false,
+    holdListening: true,          // play() pausa a escuta do modo conversa
+    after: () => mediaBox.play(),
+  }),
+  no: () => { mediaBox.hideAsk(); return { text: 'Tudo bem. Fica aqui na caixa se quiser ver depois.' }; },
+});
 document.getElementById('mediaPrev').onclick = () => mediaBox.step(-1);
 document.getElementById('mediaNext').onclick = () => mediaBox.step(1);
 document.getElementById('mediaClose').onclick = () => mediaBox.close();
@@ -2377,16 +2595,442 @@ addEventListener('keydown', ev => {
 });
 
 /* =====================================================================
+   Agentes de IA — tarefas delegadas (código, revisão, pesquisa)
+   Presença discreta (HUD + satélites), avisos e Visão de Atividades
+   ===================================================================== */
+const TASK_COLORS = {
+  queued: '#8a93a3', running: '#39d0ff', awaiting_approval: '#ffb020',
+  failed: '#ff5a4a', done: '#4fdc8a', cancelled: '#6b7280',
+};
+const TASK_LABEL = {
+  queued: 'na fila', running: 'trabalhando', awaiting_approval: 'aguardando aprovação',
+  failed: 'falhou', done: 'concluída', cancelled: 'cancelada',
+};
+const KIND_LABEL = { codigo: 'código', revisao: 'revisão', pesquisa: 'pesquisa' };
+const ACTIVE = new Set(['queued', 'running', 'awaiting_approval']);
+
+function since(ts) {
+  if (!ts) return '';
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 60) return `${Math.round(s)} s`;
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+}
+function taskName(t) { return t.project || KIND_LABEL[t.kind] || 'tarefa'; }
+
+const agents = {
+  tasks: new Map(), events: new Map(), status: {}, ws: null, wsTry: 0, noticeQueue: [],
+
+  async init() {
+    await this.refresh();
+    this.connect();
+    setInterval(() => this.refresh(), 15000);
+    setInterval(() => { this.renderHud(); if (activity.isOpen()) activity.renderList(); }, 5000);
+    setInterval(() => this.flushNotices(), 1000);
+    const sel = document.getElementById('vpNotices');
+    sel.value = store.get('galaxy-notices', 'all');
+    sel.onchange = () => store.set('galaxy-notices', sel.value);
+  },
+
+  async api(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: headers({ 'Content-Type': 'application/json', ...(opts.headers || {}) }) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `erro ${r.status}`);
+    return data;
+  },
+
+  async refresh() {
+    try {
+      const d = await this.api('/v1/tasks?limit=40');
+      const { tasks, ...status } = d;
+      this.status = status;
+      for (const t of tasks) this.upsert(t, { silent: true });
+      this.renderHud(); satellites.sync(); activity.renderAll();
+    } catch { /* servidor sem tarefas ou offline */ }
+  },
+
+  connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const protocols = API_KEY ? ['openjarvis.auth.v1', `openjarvis.key.b64url.${btoa(unescape(encodeURIComponent(API_KEY))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`] : undefined;
+    let ws;
+    try { ws = new WebSocket(`${proto}://${location.host}/v1/agents/events`, protocols); } catch { return; }
+    this.ws = ws;
+    ws.onopen = () => { this.wsTry = 0; };
+    ws.onmessage = ev => {
+      let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.type === 'devtask_updated') this.upsert(msg.data.task);
+      else if (msg.type === 'devtask_event') this.onEvent(msg.data);
+    };
+    ws.onclose = () => { setTimeout(() => this.connect(), Math.min(30000, 1000 * 2 ** this.wsTry++)); };
+  },
+
+  upsert(task, { silent = false } = {}) {
+    const prev = this.tasks.get(task.id);
+    this.tasks.set(task.id, task);
+    if (!silent && prev && prev.status !== task.status) this.onTransition(prev, task);
+    if (!silent && !prev) satellites.flash(task.id);
+    this.renderHud(); satellites.sync();
+    activity.onTask(task);
+  },
+
+  onEvent({ task_id, seq, kind, payload, ts }) {
+    const list = this.events.get(task_id);
+    if (list && !list.some(e => e.seq === seq)) list.push({ seq, kind, payload, ts });
+    if (kind === 'tool_start') satellites.flash(task_id);
+    activity.onEvent(task_id);
+  },
+
+  active() { return [...this.tasks.values()].filter(t => ACTIVE.has(t.status)).sort((a, b) => a.created_at - b.created_at); },
+
+  /* Indicador discreto no HUD */
+  renderHud() {
+    const hud = document.getElementById('tasksHud');
+    const act = this.active();
+    document.getElementById('actBadge').textContent = act.length ? String(act.length) : '';
+    if (!act.length) { hud.innerHTML = ''; return; }
+    const line = t => {
+      const step = t.status === 'running' ? (t.current_step || 'trabalhando') : TASK_LABEL[t.status];
+      return `<div class="th-line ${t.status}" data-id="${t.id}" style="--c:${TASK_COLORS[t.status]}" title="${escapeHtml(t.title)}">
+        <span class="th-dot"></span><b>${escapeHtml(taskName(t))}</b> · <span class="th-step">${escapeHtml(step)}</span> · ${since(t.started_at || t.created_at)}</div>`;
+    };
+    const html = act.length > 2
+      ? line(act[0]) + `<div class="th-line" data-id=""><span class="th-dot" style="--c:#39d0ff"></span>${act.length} agentes trabalhando</div>`
+      : act.map(line).join('');
+    if (hud.innerHTML !== html) hud.innerHTML = html;
+  },
+
+  /* Avisos: só concluiu, precisa de aprovação e falhou */
+  onTransition(prev, t) {
+    const name = taskName(t);
+    if (t.status === 'awaiting_approval') {
+      const n = (t.files || []).length;
+      const text = `Pronto, Jonatan: ${t.title} (${name}) está na branch, ${n} arquivo${n === 1 ? '' : 's'} alterado${n === 1 ? '' : 's'}. Abro o PR?`;
+      this.notice({ task: t, text, kind: 'approval', title: 'Aprovação necessária' });
+    } else if (t.status === 'done' && prev.status === 'running') {
+      const tail = t.kind === 'pesquisa' ? ' O relatório está pronto.' : t.kind === 'revisao' ? ' A revisão está pronta.' : '';
+      this.notice({ task: t, text: `Terminei: ${t.title} (${name}).${tail}`, kind: 'done', title: 'Tarefa concluída' });
+    } else if (t.status === 'failed') {
+      this.notice({ task: t, text: `A tarefa ${t.title} (${name}) falhou: ${t.error || 'erro desconhecido'}`, kind: 'failed', title: 'Tarefa falhou' });
+    } else if (t.status === 'done' && prev.status === 'awaiting_approval' && t.pr_url) {
+      toast({ title: 'Publicado', text: `${t.title} — PR aberto.`, color: TASK_COLORS.done, onClick: () => window.open(t.pr_url, '_blank', 'noopener') });
+    }
+  },
+
+  notice(n) {
+    toast({
+      title: n.title, text: n.text, color: TASK_COLORS[n.task.status],
+      onClick: () => activity.open(n.task.id),
+      actions: n.kind === 'approval' ? [
+        { label: 'Aprovar', primary: true, run: () => this.approve(n.task.id) },
+        { label: 'Ver', run: () => activity.open(n.task.id) },
+      ] : [{ label: 'Ver', run: () => activity.open(n.task.id) }],
+    });
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      const notif = new Notification(`Jarvis — ${n.title}`, { body: n.text, tag: n.task.id });
+      notif.onclick = () => { window.focus(); activity.open(n.task.id); };
+    }
+    const pref = store.get('galaxy-notices', 'all');
+    if (pref === 'none' || (pref === 'approvals' && n.kind !== 'approval')) {
+      if (n.kind === 'approval') this.askApproval(n.task, n.text, { announce: false });
+      return;
+    }
+    this.noticeQueue.push(n);
+  },
+
+  // A fala espera: nunca interrompe o Jarvis falando, ouvindo ou pensando
+  flushNotices() {
+    if (!this.noticeQueue.length || busy || speaker.active) return;
+    if (talk.on && talk.phase !== 'listening' && talk.phase !== 'paused') return;
+    const n = this.noticeQueue.shift();
+    if (n.kind === 'approval') this.askApproval(n.task, n.text);
+    else if (talk.on) talk.announce(n.text);
+    else if (ttsOn) speaker.say(n.text);
+  },
+
+  askApproval(task, question, { announce = true } = {}) {
+    const opts = {
+      kind: 'approval', question, yesLabel: 'Aprovar e abrir PR', noLabel: 'Negar',
+      valid: () => this.tasks.get(task.id)?.status === 'awaiting_approval',
+      unclear: 'Não entendi. Abro o PR? Responda sim ou não.',
+      yes: async () => {
+        const t = await this.approve(task.id);
+        return { text: t.pr_url ? 'Feito: publiquei a branch e abri o PR.' : 'Publiquei a branch. ' + (t.error || '') };
+      },
+      no: () => { this.deny(task.id); return { text: 'Tudo bem, não publiquei. A branch ficou só no seu computador.' }; },
+    };
+    if (announce) confirmPrompt.ask(opts);
+    else confirmPrompt.pending = { ...opts, at: Date.now(), retried: false };
+  },
+
+  /* Delegação proposta pelo Jarvis: confirma antes de criar */
+  proposeDelegation(spec) {
+    const what = spec.title || (spec.prompt.length > 140 ? spec.prompt.slice(0, 137) + '…' : spec.prompt);
+    const where = spec.project ? ` no projeto ${spec.project}` : '';
+    confirmPrompt.ask({
+      kind: 'delegate',
+      question: `Delegar a um agente (${KIND_LABEL[spec.kind]})${where}: “${what}”?`,
+      yesLabel: 'Delegar', noLabel: 'Cancelar',
+      unclear: 'Não entendi. Delego ao agente? Responda sim ou não.',
+      yes: async () => {
+        if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+        const t = await this.api('/v1/tasks', { method: 'POST', body: JSON.stringify(spec) });
+        this.upsert(t, { silent: true });
+        this.events.set(t.id, []);
+        return { text: `Combinado: o agente começou${where}. Te aviso quando terminar.` };
+      },
+      no: () => ({ text: 'Tudo bem, não deleguei.' }),
+    });
+  },
+
+  async approve(id) { const t = await this.api(`/v1/tasks/${id}/approve`, { method: 'POST' }); this.upsert(t); return t; },
+  async deny(id) { const t = await this.api(`/v1/tasks/${id}/deny`, { method: 'POST' }); this.upsert(t); return t; },
+  async cancel(id) { const t = await this.api(`/v1/tasks/${id}/cancel`, { method: 'POST' }); this.upsert(t); return t; },
+  async followup(id, prompt) { const t = await this.api(`/v1/tasks/${id}/followup`, { method: 'POST', body: JSON.stringify({ prompt }) }); this.upsert(t); return t; },
+  async killswitch() { const d = await this.api('/v1/tasks/killswitch', { method: 'POST' }); await this.refresh(); return d.stopped.length; },
+  async resume() { await this.api('/v1/tasks/resume', { method: 'POST' }); await this.refresh(); },
+
+  // O Jarvis sabe o que os agentes estão fazendo (entra no prompt de sistema)
+  contextText() {
+    const recent = [...this.tasks.values()].sort((a, b) => b.created_at - a.created_at).slice(0, 6);
+    if (!recent.length) return '';
+    return '## Tarefas dos agentes agora\n' + recent.map(t =>
+      `- #${t.id} [${TASK_LABEL[t.status]}] ${KIND_LABEL[t.kind]}${t.project ? ' em ' + t.project : ''}: ${t.title}` +
+      (t.status === 'running' ? ` — passo atual: ${t.current_step || '…'} (${since(t.started_at)})` : '') +
+      (t.summary && t.status !== 'running' ? ` — resultado: ${t.summary.replace(/\s+/g, ' ').slice(0, 220)}` : '') +
+      (t.error ? ` — ${t.error.slice(0, 120)}` : '')).join('\n');
+  },
+};
+
+/* Comandos que a página resolve sozinha, sem passar pelo modelo */
+async function localCommand(text) {
+  const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/\b(par[ae]r?|cancel[ae]r?)\b.*\b(tud[oa]|todas as tarefas|todos os agentes)\b|\bbotao de panico\b/.test(t)) {
+    const n = await agents.killswitch().catch(() => -1);
+    return n < 0 ? 'Não consegui falar com o servidor de tarefas.' : n ? `Parei ${n} tarefa${n > 1 ? 's' : ''} e pausei a fila.` : 'Nenhum agente estava rodando; pausei a fila.';
+  }
+  if (activity.isOpen() && /\bfech[ae]r?\b.*\b(atividades|painel|isso|essa tela)\b/.test(t)) { activity.close(); return 'Fechei as atividades.'; }
+  return null;
+}
+
+/* Satélites discretos: um por tarefa ativa, orbitando a esfera */
+const satellites = {
+  group: new THREE.Group(), items: new Map(),
+  texture: (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,.7)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })(),
+  init() { scene.add(this.group); frameHooks.push(dt => this.tick(dt)); },
+  sync() {
+    const act = agents.active();
+    const ids = new Set(act.map(t => t.id));
+    for (const [id, s] of this.items) if (!ids.has(id)) { s.fading = true; }
+    act.forEach((t, i) => {
+      let s = this.items.get(t.id);
+      if (!s) {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+        sprite.scale.setScalar(0.9);
+        sprite.userData.taskId = t.id;
+        s = { sprite, angle: Math.random() * Math.PI * 2, tilt: (i % 3 - 1) * 0.5 + 0.25, speed: 0.18 + Math.random() * 0.1, pulse: 0, opacity: 0 };
+        this.items.set(t.id, s);
+        this.group.add(sprite);
+      }
+      s.fading = false;
+      s.sprite.material.color.set(TASK_COLORS[t.status]);
+    });
+  },
+  flash(id) { const s = this.items.get(id); if (s) s.pulse = 1; },
+  tick(dt) {
+    for (const [id, s] of this.items) {
+      s.angle += dt * s.speed;
+      s.pulse *= Math.exp(-dt * 2.5);
+      const target = s.fading ? 0 : 0.55 + s.pulse * 0.45;
+      s.opacity += (target - s.opacity) * (1 - Math.exp(-dt * 3));
+      const r = R * 1.28;
+      s.sprite.position.set(Math.cos(s.angle) * r, Math.sin(s.angle) * r * Math.sin(s.tilt), Math.sin(s.angle) * r * Math.cos(s.tilt));
+      s.sprite.material.opacity = s.opacity;
+      s.sprite.scale.setScalar(0.75 + s.pulse * 0.6);
+      if (s.fading && s.opacity < 0.02) { this.group.remove(s.sprite); s.sprite.material.dispose(); this.items.delete(id); }
+    }
+  },
+  pick(ev) {
+    if (!this.items.size) return null;
+    const rect = canvas.getBoundingClientRect();
+    mouse.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObjects(this.group.children)[0];
+    return hit?.object.userData.taskId || null;
+  },
+};
+
+/* Avisos pequenos que somem sozinhos */
+function toast({ title, text, color, onClick, actions = [], ttl = 6000 }) {
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.setProperty('--c', color || 'var(--accent)');
+  el.innerHTML = `<small>${escapeHtml(title)}</small>${escapeHtml(text)}`;
+  if (actions.length) {
+    const row = document.createElement('div'); row.className = 't-actions';
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.className = `pill-btn${a.primary ? ' primary' : ''}`; b.textContent = a.label;
+      b.onclick = ev => { ev.stopPropagation(); a.run(); dismiss(); };
+      row.appendChild(b);
+    }
+    el.appendChild(row);
+  }
+  const dismiss = () => { el.classList.add('hide'); setTimeout(() => el.remove(), 300); };
+  el.onclick = () => { onClick?.(); dismiss(); };
+  box.appendChild(el);
+  let timer = setTimeout(dismiss, actions.length ? ttl * 2 : ttl);
+  el.onmouseenter = () => clearTimeout(timer);
+  el.onmouseleave = () => { timer = setTimeout(dismiss, 2500); };
+  while (box.children.length > 4) box.firstChild.remove();
+}
+
+/* Visão de Atividades */
+const activity = {
+  el: document.getElementById('activity'), selected: null, diffFile: null,
+  isOpen() { return !this.el.hidden; },
+  open(focus = '') {
+    this.el.hidden = false;
+    document.body.classList.add('activity-open');
+    const all = [...agents.tasks.values()].sort((a, b) => b.created_at - a.created_at);
+    const f = (focus || '').toLowerCase();
+    const pick = (f && (agents.tasks.get(focus) || all.find(t => t.project.toLowerCase() === f && ACTIVE.has(t.status)) || all.find(t => t.project.toLowerCase() === f)))
+      || agents.active()[0] || all[0];
+    this.select(pick?.id || null);
+  },
+  close() { this.el.hidden = true; document.body.classList.remove('activity-open'); },
+  async select(id) {
+    this.selected = id; this.diffFile = null;
+    if (id && !agents.events.has(id)) {
+      try { const d = await agents.api(`/v1/tasks/${id}`); agents.events.set(id, d.events); agents.upsert(d.task, { silent: true }); }
+      catch { agents.events.set(id, []); }
+    }
+    this.renderAll();
+  },
+  onTask(t) { if (this.isOpen()) { this.renderList(); if (t.id === this.selected) this.renderDetail(); } },
+  onEvent(id) { if (this.isOpen() && id === this.selected) this.renderDetail(); },
+  renderAll() { if (!this.isOpen()) return; this.renderList(); this.renderDetail(); this.renderFoot(); },
+  renderList() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const list = [...agents.tasks.values()]
+      .filter(t => ACTIVE.has(t.status) || t.created_at * 1000 >= today.getTime() || t.id === this.selected)
+      .sort((a, b) => (ACTIVE.has(b.status) - ACTIVE.has(a.status)) || b.created_at - a.created_at);
+    const box = document.getElementById('actList');
+    document.getElementById('actCounts').textContent = `${agents.active().length} ativa(s) · ${list.length} hoje`;
+    if (!list.length) { box.innerHTML = '<div class="act-empty">Nenhuma tarefa hoje.<br>Peça ao Jarvis para delegar algo.</div>'; return; }
+    box.innerHTML = list.map(t => `<div class="act-card${t.id === this.selected ? ' sel' : ''}" data-id="${t.id}">
+      <div class="ac-top"><span class="status-pill" style="--c:${TASK_COLORS[t.status]}">${TASK_LABEL[t.status]}</span>${escapeHtml(taskName(t))} · ${since(t.started_at || t.created_at)}</div>
+      <div class="ac-title">${escapeHtml(t.title)}</div>
+      <div class="ac-step">${escapeHtml(t.status === 'running' ? (t.current_step || '…') : (t.error || (t.summary || '').replace(/\s+/g, ' ').slice(0, 90) || KIND_LABEL[t.kind]))}</div>
+    </div>`).join('');
+  },
+  renderDetail() {
+    const box = document.getElementById('actDetail');
+    const t = agents.tasks.get(this.selected);
+    if (!t) { box.innerHTML = '<div class="act-empty">Selecione uma tarefa.</div>'; return; }
+    const evs = agents.events.get(t.id) || [];
+    const lastText = [...evs].reverse().find(e => e.kind === 'text');
+    const ends = new Map(evs.filter(e => e.kind === 'tool_end').map(e => [e.payload.id, e]));
+    const denied = new Set(evs.filter(e => e.kind === 'denied').map(e => e.payload.id));
+    const timeline = evs.filter(e => ['tool_start', 'text', 'followup', 'published'].includes(e.kind)).slice(-80).map(e => {
+      const time = new Date(e.ts * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (e.kind === 'text') return `<div class="tl-row think"><time>${time}</time><span class="tl-ic">💭</span><span class="tl-txt">${escapeHtml(e.payload.text.slice(0, 400))}</span><span></span></div>`;
+      if (e.kind === 'followup') return `<div class="tl-row"><time>${time}</time><span class="tl-ic">↩</span><span class="tl-txt">ajuste pedido: ${escapeHtml(e.payload.text)}</span><span></span></div>`;
+      if (e.kind === 'published') return `<div class="tl-row"><time>${time}</time><span class="tl-ic">🚀</span><span class="tl-txt">publicado ${escapeHtml(e.payload.pr_url || e.payload.compare_url || '')}</span><span></span></div>`;
+      const end = ends.get(e.payload.id);
+      const cls = denied.has(e.payload.id) ? 'denied' : end && !end.payload.ok ? 'err' : '';
+      const icon = denied.has(e.payload.id) ? '⛔' : !end ? '⋯' : end.payload.ok ? '✓' : '✗';
+      const dur = end ? `${Math.max(0, end.ts - e.ts).toFixed(1)}s` : '';
+      return `<div class="tl-row ${cls}" title="${escapeHtml(e.payload.detail || '')}"><time>${time}</time><span class="tl-ic">${icon}</span><span class="tl-txt">${escapeHtml(e.payload.step)}</span><span class="tl-dur">${dur}</span></div>`;
+    }).join('');
+    const term = evs.filter(e => e.kind === 'tool_start' && /^Bash/.test(e.payload.tool)).slice(-4).map(e => {
+      const out = ends.get(e.payload.id)?.payload.output || '';
+      return `<span class="cmd">$ ${escapeHtml(e.payload.detail)}</span>\n${escapeHtml(out.split('\n').slice(-12).join('\n'))}`;
+    }).join('\n\n');
+    const files = (t.files || []).map(f => `<button data-file="${escapeHtml(f)}">${escapeHtml(f)}</button>`).join('');
+    const acts = [];
+    if (t.status === 'awaiting_approval') acts.push('<button class="pill-btn primary" data-act="approve">Aprovar e abrir PR</button>', '<button class="pill-btn" data-act="deny">Negar</button>');
+    if (t.status === 'queued' || t.status === 'running') acts.push('<button class="pill-btn danger" data-act="cancel">Cancelar</button>');
+    if (t.pr_url) acts.push(t.pr_url.startsWith('http') ? `<a class="pill-btn" href="${escapeHtml(t.pr_url)}" target="_blank" rel="noopener">Abrir PR</a>` : `<span class="act-meta">relatório: ${escapeHtml(t.pr_url)}</span>`);
+    const canFollow = t.session_id && !ACTIVE.has(t.status) ? true : t.status === 'awaiting_approval';
+    box.innerHTML = `
+      <div>
+        <div class="act-meta"><span class="status-pill" style="--c:${TASK_COLORS[t.status]}">${TASK_LABEL[t.status]}</span>
+          <span>${KIND_LABEL[t.kind]}${t.project ? ' · ' + escapeHtml(t.project) : ''}</span>
+          ${t.branch ? `<span>branch ${escapeHtml(t.branch)}</span>` : ''}
+          <span>${since(t.started_at || t.created_at)}</span><span>${t.steps} passos</span><span>US$ ${(t.cost_usd || 0).toFixed(2)}</span></div>
+        <h3 style="margin-top:8px">${escapeHtml(t.title)}</h3>
+      </div>
+      <div class="act-actions">${acts.join('')}</div>
+      ${t.error ? `<div class="act-sec"><h4>Atenção</h4><div class="act-summary" style="color:#ffcf6e">${escapeHtml(t.error)}</div></div>` : ''}
+      ${t.status === 'running' ? `<div class="act-sec"><h4>Agora</h4><div class="act-now"><span class="th-dot" style="--c:${TASK_COLORS.running}"></span>${escapeHtml(t.current_step || 'trabalhando…')}</div>${lastText ? `<div class="act-thought">${escapeHtml(lastText.payload.text.slice(0, 500))}</div>` : ''}</div>` : ''}
+      ${t.summary && t.status !== 'running' ? `<div class="act-sec"><h4>Resultado</h4><div class="act-summary">${renderMarkdown(t.summary)}</div></div>` : ''}
+      ${files ? `<div class="act-sec"><h4>Arquivos alterados (${(t.files || []).length})</h4><div class="files">${files}</div>${this.diffFile ? `<div class="diff" id="actDiff">carregando diff…</div>` : ''}</div>` : ''}
+      <div class="act-sec"><h4>Linha do tempo</h4><div class="timeline" id="actTimeline">${timeline || '<span class="act-meta">aguardando os primeiros passos…</span>'}</div></div>
+      ${term ? `<div class="act-sec"><h4>Terminal</h4><div class="term">${term}</div></div>` : ''}
+      ${canFollow ? `<div class="act-sec"><h4>Pedir ajuste</h4><form class="act-followup" id="actFollow"><input placeholder="ex.: agora adiciona testes para isso" maxlength="2000"><button class="pill-btn primary">Enviar</button></form></div>` : ''}
+      <div class="act-sec"><h4>Pedido original</h4><div class="act-meta" style="white-space:pre-wrap">${escapeHtml(t.prompt)}</div></div>`;
+    const tl = document.getElementById('actTimeline'); if (tl) tl.scrollTop = tl.scrollHeight;
+    box.querySelectorAll('[data-act]').forEach(b => { b.onclick = async () => {
+      b.disabled = true;
+      try { await agents[b.dataset.act](t.id); } catch (err) { toast({ title: 'Erro', text: err.message, color: TASK_COLORS.failed }); }
+      confirmPrompt.clear('approval');
+    }; });
+    box.querySelectorAll('[data-file]').forEach(b => { b.onclick = () => { this.diffFile = b.dataset.file; this.renderDetail(); this.loadDiff(t.id, b.dataset.file); }; });
+    const form = document.getElementById('actFollow');
+    if (form) form.onsubmit = async ev => {
+      ev.preventDefault();
+      const v = form.querySelector('input').value.trim();
+      if (!v) return;
+      try { await agents.followup(t.id, v); } catch (err) { toast({ title: 'Erro', text: err.message, color: TASK_COLORS.failed }); }
+    };
+    if (this.diffFile) this.loadDiff(t.id, this.diffFile);
+  },
+  async loadDiff(id, file) {
+    const el = document.getElementById('actDiff');
+    if (!el) return;
+    try {
+      const r = await fetch(`/v1/tasks/${id}/diff?file=${encodeURIComponent(file)}`, { headers: headers() });
+      const text = r.ok ? await r.text() : 'Diff indisponível (o worktree já foi removido).';
+      el.innerHTML = text.split('\n').map(l => `<span class="${l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : l.startsWith('@@') ? 'hunk' : ''}">${escapeHtml(l)}</span>`).join('\n');
+    } catch { el.textContent = 'Diff indisponível.'; }
+  },
+  renderFoot() {
+    const st = agents.status;
+    const queued = [...agents.tasks.values()].filter(t => t.status === 'queued').length;
+    document.getElementById('actQueue').textContent = `${queued} na fila${st.paused ? ' · fila pausada' : ''}`;
+    document.getElementById('actCost').textContent = st.daily_budget != null ? `hoje US$ ${(st.cost_today || 0).toFixed(2)} de ${st.daily_budget}` : '';
+    document.getElementById('actGh').textContent = st.gh_ready ? 'GitHub conectado' : 'PR indisponível: rode gh auth login';
+    const kill = document.getElementById('actKill');
+    kill.textContent = st.paused ? 'Retomar fila' : 'Parar tudo';
+    kill.onclick = async () => { st.paused ? await agents.resume() : await agents.killswitch(); this.renderFoot(); };
+  },
+};
+document.getElementById('actClose').onclick = () => activity.close();
+document.getElementById('actBtn').onclick = () => (activity.isOpen() ? activity.close() : activity.open());
+document.getElementById('actList').addEventListener('click', ev => { const c = ev.target.closest('.act-card'); if (c) activity.select(c.dataset.id); });
+document.getElementById('tasksHud').addEventListener('click', ev => { const l = ev.target.closest('.th-line'); if (l) activity.open(l.dataset.id); });
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && activity.isOpen()) { ev.stopImmediatePropagation(); activity.close(); } }, true);
+
+/* =====================================================================
    Legenda + inicialização
    ===================================================================== */
 document.getElementById('legend').innerHTML = '<div class="legend-title">REAÇÕES</div>' +
   LEGEND.map(k => `<span><i style="color:${PALETTES[k].hot};background:radial-gradient(circle at 35% 35%, ${PALETTES[k].hot}, ${PALETTES[k].deep})"></i>${PALETTES[k].label}</span>`).join('');
 
 // Gancho para depuração/automação: window.jarvisGalaxy.setState('tool')
-window.jarvisGalaxy = { setState, emitWave, talk, mediaBox, parseReply, history };
+window.jarvisGalaxy = { setState, emitWave, talk, mediaBox, parseReply, history, agents, activity, confirmPrompt };
 
 requestAnimationFrame(frame);
 setState('thinking');
+satellites.init();
+agents.init();
 Promise.all([loadModel(), loadGraph(), loadPersona()]).then(() => {
   setState('idle');
   emitWave(1.5);

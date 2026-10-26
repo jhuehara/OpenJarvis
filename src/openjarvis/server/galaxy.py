@@ -639,7 +639,42 @@ def galaxy_persona(request: Request):
             "\n\n## Suas atividades recentes (horário de Brasília)\n"
             "Use para lembrar do que já conversaram e fizeram juntos.\n" + recent
         )
+    runner = getattr(request.app.state, "devtasks", None)
+    if runner is not None:
+        prompt += "\n\n" + delegation_rules(runner.registry.list())
     return {"prompt": prompt}
+
+
+def delegation_rules(projects: Iterable[Any]) -> str:
+    """How Jarvis delegates work to coding agents (the page parses the tags)."""
+    listed = (
+        "\n".join(
+            f"- {p.name}" + (f": {p.description}" if p.description else "")
+            for p in projects
+        )
+        or "- (nenhum projeto cadastrado ainda)"
+    )
+    rules = (
+        "Quando o usuário pedir algo que exige mexer em código, revisar código ou uma "
+        "pesquisa aprofundada, não faça você mesmo: diga em uma frase o que o agente "
+        "vai fazer e coloque no fim da resposta exatamente uma linha "
+        "[[tarefa: tipo | projeto | título curto | pedido]] — tipo é codigo, revisao "
+        "ou pesquisa (pesquisa pode ficar sem projeto); o título tem até 6 palavras. "
+        "Escreva o pedido completo e "
+        "autossuficiente para o agente, com o contexto da conversa. A interface pede "
+        "a confirmação; não pergunte de novo. Agentes de código trabalham numa branch "
+        "nova e o push/PR só acontece depois da aprovação do usuário. Se o projeto não "
+        "estiver cadastrado, diga que ele precisa ser cadastrado primeiro.\n"
+        "Quando ele pedir para ver o que está sendo executado ou o que os agentes "
+        "estão fazendo, responda com um resumo de uma frase e inclua "
+        "[[abrir: atividades]] (ou [[abrir: atividades | projeto]] para focar num "
+        "agente)."
+    )
+    return (
+        "## Agentes de IA que trabalham para você\n"
+        "Você pode delegar trabalho a agentes de IA (Claude Code) que rodam em "
+        f"segundo plano. Projetos cadastrados:\n{listed}\n{rules}"
+    )
 
 
 class RememberRequest(BaseModel):
