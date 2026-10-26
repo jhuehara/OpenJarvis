@@ -1277,6 +1277,18 @@ class DevTaskProject:
 
 
 @dataclass(slots=True)
+class DevTaskRoutine:
+    """A scheduled dev task (``[[devtasks.routines]]``)."""
+
+    name: str = ""
+    cron: str = ""  # e.g. "0 8 * * *" (devtasks.timezone)
+    kind: str = "resumo"  # codigo | revisao | pesquisa | resumo | checagem
+    project: str = ""  # "" = all projects (resumo), "*" = one task per project
+    prompt: str = ""
+    enabled: bool = True
+
+
+@dataclass(slots=True)
 class DevTasksConfig:
     """Delegated development tasks run by coding agents (``[devtasks]``)."""
 
@@ -1295,6 +1307,8 @@ class DevTasksConfig:
     reports_dir: str = field(default_factory=lambda: str(get_config_dir() / "reports"))
     db_path: str = field(default_factory=lambda: str(get_config_dir() / "tasks.db"))
     projects: List[DevTaskProject] = field(default_factory=list)
+    timezone: str = "America/Sao_Paulo"
+    routines: List[DevTaskRoutine] = field(default_factory=list)
 
 
 @dataclass(slots=True)

@@ -1364,6 +1364,7 @@ function renderMarkdown(src) {
   h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, __, code) => `<pre>${code}</pre>`);
   h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  h = h.replace(/^#{1,4} (.+)$/gm, '<strong style="display:block;margin-top:6px;color:var(--accent);letter-spacing:.04em">$1</strong>');
   return h.replace(/\n/g, '<br>');
 }
 function addMessage(role, text = '') {
@@ -1452,7 +1453,8 @@ function parseReply(text) {
       const title = parts.length >= 4 ? parts[2] : '';
       const prompt = parts.slice(parts.length >= 4 ? 3 : 2).join(' | ').trim();
       const k = (kind || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (prompt) tasks.push({ kind: k.startsWith('rev') ? 'revisao' : k.startsWith('pesq') ? 'pesquisa' : 'codigo', project, title, prompt });
+      const kindOf = k.startsWith('rev') ? 'revisao' : k.startsWith('pesq') ? 'pesquisa' : k.startsWith('res') ? 'resumo' : k.startsWith('chec') || k.startsWith('test') ? 'checagem' : 'codigo';
+      if (prompt) tasks.push({ kind: kindOf, project, title, prompt });
     } else if (key === 'abrir' || key === 'mostrar') {
       const [target, focus] = value.split('|').map(x => x.trim());
       if (/ativid|agente|tarefa/i.test(target)) open = { view: 'atividades', focus: focus || '' };
@@ -2648,7 +2650,7 @@ const TASK_LABEL = {
   queued: 'na fila', running: 'trabalhando', awaiting_approval: 'aguardando aprovação',
   failed: 'falhou', done: 'concluída', cancelled: 'cancelada',
 };
-const KIND_LABEL = { codigo: 'código', revisao: 'revisão', pesquisa: 'pesquisa' };
+const KIND_LABEL = { codigo: 'código', revisao: 'revisão', pesquisa: 'pesquisa', resumo: 'resumo', checagem: 'checagem de testes' };
 const ACTIVE = new Set(['queued', 'running', 'awaiting_approval']);
 
 function since(ts) {
@@ -2749,8 +2751,19 @@ const agents = {
       const text = `Pronto, Jonatan: ${t.title} (${name}) está na branch, ${n} arquivo${n === 1 ? '' : 's'} alterado${n === 1 ? '' : 's'}. Abro o PR?`;
       this.notice({ task: t, text, kind: 'approval', title: 'Aprovação necessária' });
     } else if (t.status === 'done' && prev.status === 'running') {
-      const tail = t.kind === 'pesquisa' ? ' O relatório está pronto.' : t.kind === 'revisao' ? ' A revisão está pronta.' : '';
-      this.notice({ task: t, text: `Terminei: ${t.title} (${name}).${tail}`, kind: 'done', title: 'Tarefa concluída' });
+      if (t.silent) return;                          // ex.: checagem de testes que passou
+      if (t.kind === 'checagem') {
+        const detail = (t.summary || '').replace(/STATUS:.*$/is, '').trim().slice(0, 220);
+        if (/STATUS:\s*NAO_RODOU/i.test(t.summary || '')) {
+          this.notice({ task: t, text: `Não consegui rodar a checagem de testes do ${name}. ${detail}`, kind: 'failed', title: 'Checagem não rodou' });
+        } else {
+          this.notice({ task: t, text: `Atenção, Jonatan: a checagem de testes do ${name} encontrou falhas. ${detail}`, kind: 'failed', title: 'Testes quebrados' });
+        }
+        return;
+      }
+      const tail = { pesquisa: ' O relatório está pronto.', revisao: ' A revisão está pronta.', resumo: '' }[t.kind] ?? '';
+      const lead = t.routine ? `${t.title} está pronto.` : `Terminei: ${t.title} (${name}).`;
+      this.notice({ task: t, text: `${lead}${tail}`, kind: 'done', title: t.routine ? 'Rotina concluída' : 'Tarefa concluída' });
     } else if (t.status === 'failed') {
       this.notice({ task: t, text: `A tarefa ${t.title} (${name}) falhou: ${t.error || 'erro desconhecido'}`, kind: 'failed', title: 'Tarefa falhou' });
     } else if (t.status === 'done' && prev.status === 'awaiting_approval' && t.pr_url) {
@@ -2967,7 +2980,7 @@ const activity = {
     document.getElementById('actCounts').textContent = `${agents.active().length} ativa(s) · ${list.length} hoje`;
     if (!list.length) { box.innerHTML = '<div class="act-empty">Nenhuma tarefa hoje.<br>Peça ao Jarvis para delegar algo.</div>'; return; }
     box.innerHTML = list.map(t => `<div class="act-card${t.id === this.selected ? ' sel' : ''}" data-id="${t.id}">
-      <div class="ac-top"><span class="status-pill" style="--c:${TASK_COLORS[t.status]}">${TASK_LABEL[t.status]}</span>${escapeHtml(taskName(t))} · ${since(t.started_at || t.created_at)}</div>
+      <div class="ac-top"><span class="status-pill" style="--c:${TASK_COLORS[t.status]}">${TASK_LABEL[t.status]}</span>${escapeHtml(taskName(t))} · ${since(t.started_at || t.created_at)}${t.routine ? ' · ⏱ rotina' : ''}</div>
       <div class="ac-title">${escapeHtml(t.title)}</div>
       <div class="ac-step">${escapeHtml(t.status === 'running' ? (t.current_step || '…') : (t.error || (t.summary || '').replace(/\s+/g, ' ').slice(0, 90) || KIND_LABEL[t.kind]))}</div>
     </div>`).join('');
@@ -2999,7 +3012,7 @@ const activity = {
     const acts = [];
     if (t.status === 'awaiting_approval') acts.push('<button class="pill-btn primary" data-act="approve">Aprovar e abrir PR</button>', '<button class="pill-btn" data-act="deny">Negar</button>');
     if (t.status === 'queued' || t.status === 'running') acts.push('<button class="pill-btn danger" data-act="cancel">Cancelar</button>');
-    if (t.pr_url) acts.push(t.pr_url.startsWith('http') ? `<a class="pill-btn" href="${escapeHtml(t.pr_url)}" target="_blank" rel="noopener">Abrir PR</a>` : `<span class="act-meta">relatório: ${escapeHtml(t.pr_url)}</span>`);
+    if (t.pr_url && t.pr_url.startsWith('http')) acts.push(`<a class="pill-btn" href="${escapeHtml(t.pr_url)}" target="_blank" rel="noopener">Abrir PR</a>`);
     const canFollow = t.session_id && !ACTIVE.has(t.status) ? true : t.status === 'awaiting_approval';
     box.innerHTML = `
       <div>
@@ -3012,7 +3025,8 @@ const activity = {
       <div class="act-actions">${acts.join('')}</div>
       ${t.error ? `<div class="act-sec"><h4>Atenção</h4><div class="act-summary" style="color:#ffcf6e">${escapeHtml(t.error)}</div></div>` : ''}
       ${t.status === 'running' ? `<div class="act-sec"><h4>Agora</h4><div class="act-now"><span class="th-dot" style="--c:${TASK_COLORS.running}"></span>${escapeHtml(t.current_step || 'trabalhando…')}</div>${lastText ? `<div class="act-thought">${escapeHtml(lastText.payload.text.slice(0, 500))}</div>` : ''}</div>` : ''}
-      ${t.summary && t.status !== 'running' ? `<div class="act-sec"><h4>Resultado</h4><div class="act-summary">${renderMarkdown(t.summary)}</div></div>` : ''}
+      ${t.summary && t.status !== 'running' ? `<div class="act-sec"><h4>Resultado</h4><div class="act-summary">${renderMarkdown(t.summary.replace(/\n?STATUS: (OK|FALHOU)\s*$/i, ''))}</div></div>` : ''}
+      ${t.report && t.status !== 'running' ? `<div class="act-sec"><h4>Relatório completo</h4><div class="act-meta">${escapeHtml(t.report)}</div><div class="act-summary report-body" id="actReport" style="margin-top:8px;max-height:420px;overflow:auto">carregando…</div></div>` : ''}
       ${files ? `<div class="act-sec"><h4>Arquivos alterados (${(t.files || []).length})</h4><div class="files">${files}</div>${this.diffFile ? `<div class="diff" id="actDiff">carregando diff…</div>` : ''}</div>` : ''}
       <div class="act-sec"><h4>Linha do tempo</h4><div class="timeline" id="actTimeline">${timeline || '<span class="act-meta">aguardando os primeiros passos…</span>'}</div></div>
       ${term ? `<div class="act-sec"><h4>Terminal</h4><div class="term">${term}</div></div>` : ''}
@@ -3033,6 +3047,15 @@ const activity = {
       try { await agents.followup(t.id, v); } catch (err) { toast({ title: 'Erro', text: err.message, color: TASK_COLORS.failed }); }
     };
     if (this.diffFile) this.loadDiff(t.id, this.diffFile);
+    if (t.report && t.status !== 'running') this.loadReport(t.id);
+  },
+  async loadReport(id) {
+    const el = document.getElementById('actReport');
+    if (!el) return;
+    try {
+      const r = await fetch(`/v1/tasks/${id}/report`, { headers: headers() });
+      el.innerHTML = r.ok ? renderMarkdown(await r.text()) : 'Relatório indisponível.';
+    } catch { el.textContent = 'Relatório indisponível.'; }
   },
   async loadDiff(id, file) {
     const el = document.getElementById('actDiff');

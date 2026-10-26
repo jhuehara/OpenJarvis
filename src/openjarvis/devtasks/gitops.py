@@ -67,6 +67,16 @@ def create_worktree(
     return path, branch
 
 
+def create_detached_worktree(
+    repo: Path, root: Path, project: str, task_id: str, base: str
+) -> Path:
+    """Throwaway checkout of ``base`` (no branch) for read-only checks."""
+    path = (root / slugify(project) / task_id).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    git(["worktree", "add", "--detach", str(path), base], cwd=repo)
+    return path
+
+
 def remove_worktree(repo: Path, path: Path | str) -> None:
     try:
         git(["worktree", "remove", "--force", str(path)], cwd=repo)

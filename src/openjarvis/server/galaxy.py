@@ -645,6 +645,14 @@ def galaxy_persona(request: Request):
 
         projects = runner.registry.list()
         prompt += "\n\n" + delegation_rules(projects)
+        scheduler = getattr(request.app.state, "devtask_routines", None)
+        routines = scheduler.describe() if scheduler else []
+        if routines:
+            prompt += "\n\n## Rotinas agendadas (rodam sozinhas)\n" + "\n".join(
+                f"- {r['name']}: {r['kind']}, cron “{r['cron']}”"
+                + ("" if r["enabled"] else " (desativada)")
+                for r in routines
+            )
         status = projects_context(projects)
         if status:
             prompt += (
@@ -668,8 +676,10 @@ def delegation_rules(projects: Iterable[Any]) -> str:
         "Quando o usuário pedir algo que exige mexer em código, revisar código ou uma "
         "pesquisa aprofundada, não faça você mesmo: diga em uma frase o que o agente "
         "vai fazer e coloque no fim da resposta exatamente uma linha "
-        "[[tarefa: tipo | projeto | título curto | pedido]] — tipo é codigo, revisao "
-        "ou pesquisa (pesquisa pode ficar sem projeto); o título tem até 6 palavras. "
+        "[[tarefa: tipo | projeto | título curto | pedido]] — tipo é codigo, revisao, "
+        "pesquisa, resumo (estado dos projetos; projeto vazio = todos) ou checagem "
+        "(rodar os testes de um projeto); pesquisa e resumo podem ficar sem projeto; "
+        "o título tem até 6 palavras. "
         "Escreva o pedido completo e "
         "autossuficiente para o agente, com o contexto da conversa. A interface pede "
         "a confirmação; não pergunte de novo. Agentes de código trabalham numa branch "

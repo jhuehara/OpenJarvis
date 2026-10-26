@@ -34,12 +34,19 @@ FAKE_CLAUDE = textwrap.dedent(
             f.write("novo\\n")
         subprocess.run(["git", "add", "NOVO.md"], check=True)
         subprocess.run(["git", "commit", "-q", "-m", "novo"], check=True)
+    result_text = "Criei o README."
+    if mode == "check_ok":
+        result_text = "Todos os 3 testes passaram.\\nSTATUS: OK"
+    if mode == "check_fail":
+        result_text = "test_x falhou: AssertionError.\\nSTATUS: FALHOU"
+    if mode == "summary":
+        result_text = "Resumo: nada mudou."
     if mode == "edit":
         out({{"type": "assistant", "message": {{"content": [{{"type": "tool_use", "id": "t1", "name": "Write", "input": {{"file_path": os.path.join(os.getcwd(), "README.md")}}}}]}}}})
         with open("README.md", "w") as f:
             f.write("# Projeto\\n" + prompt + "\\n")
         out({{"type": "user", "message": {{"content": [{{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}}]}}}})
-    out({{"type": "result", "subtype": "success", "is_error": False, "result": "Criei o README.", "session_id": "sess-1", "total_cost_usd": 0.12, "num_turns": 2}})
+    out({{"type": "result", "subtype": "success", "is_error": False, "result": result_text, "session_id": "sess-1", "total_cost_usd": 0.12, "num_turns": 2}})
     """
 )
 
@@ -230,3 +237,56 @@ def test_approve_refuses_branch_without_commits(env):
             await runner.stop()
 
     asyncio.run(scenario())
+
+
+def test_check_task_is_silent_when_tests_pass_and_saves_report(env):
+    async def scenario():
+        runner = env["make"]("check_ok")
+        await runner.start()
+        try:
+            task = await runner.submit(
+                "checagem", "demo", "rode os testes", routine="Checagem"
+            )
+            done = await _wait(runner, task.id, {"done", "failed"})
+            assert done.status == "done" and done.silent and done.routine == "Checagem"
+            assert not Path(done.worktree).exists()  # temporary checkout removed
+            report = Path(done.report)
+            assert report.is_file() and "STATUS: OK" in report.read_text()
+            assert not done.branch  # no branch for checks
+        finally:
+            await runner.stop()
+
+    asyncio.run(scenario())
+    args = json.loads(env["log"].read_text().splitlines()[0])["args"]
+    assert "Edit" in args[args.index("--disallowedTools") :]
+
+
+def test_failed_check_is_not_silent(env):
+    async def scenario():
+        runner = env["make"]("check_fail")
+        await runner.start()
+        try:
+            task = await runner.submit("checagem", "demo", "rode os testes")
+            done = await _wait(runner, task.id, {"done", "failed"})
+            assert done.status == "done" and not done.silent
+        finally:
+            await runner.stop()
+
+    asyncio.run(scenario())
+
+
+def test_summary_gets_git_context_and_project_dirs(env):
+    async def scenario():
+        runner = env["make"]("summary")
+        await runner.start()
+        try:
+            task = await runner.submit("resumo", "demo", "resumo diário")
+            done = await _wait(runner, task.id, {"done", "failed"})
+            assert done.status == "done" and Path(done.report).is_file()
+        finally:
+            await runner.stop()
+
+    asyncio.run(scenario())
+    call = json.loads(env["log"].read_text().splitlines()[0])
+    assert "--add-dir" in call["args"]
+    assert "Contexto de git" in call["prompt"] and "### Demo" in call["prompt"]

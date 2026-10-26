@@ -25,7 +25,15 @@ from openjarvis.devtasks.store import Task, TaskStore
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("codigo", "revisao", "pesquisa")
+KINDS = ("codigo", "revisao", "pesquisa", "resumo", "checagem")
+KIND_LABELS = {
+    "codigo": "código",
+    "revisao": "revisão",
+    "pesquisa": "pesquisa",
+    "resumo": "resumo",
+    "checagem": "checagem de testes",
+}
+READ_TOOLS = ("Read", "Glob", "Grep")
 
 # Commands a coding agent may run (prefix match, per sub-command). Deny rules
 # below take precedence. This is a guardrail against mistakes and prompt
@@ -131,7 +139,8 @@ _RULES = {
         "nem cadeias longas com && ou |): comandos complexos são negados "
         "automaticamente. Se um comando for negado, tente uma forma mais simples — "
         "o terminal continua disponível para git, testes e ferramentas comuns. "
-        "Você já está na branch certa da tarefa: não crie nem troque de branch."
+        "Você já está na branch certa da tarefa: não crie nem troque de branch. Não "
+        "toque em caminhos fora deste diretório (são bloqueados)."
     ),
     "revisao": (
         "Você é um revisor de código experiente trabalhando para o Jonatan. Não "
@@ -146,6 +155,23 @@ _RULES = {
         "arquivo relatorio.md deste diretório, com as fontes no fim. Depois "
         "responda em português do Brasil com um resumo curto (3 a 5 frases) das "
         "conclusões."
+    ),
+    "resumo": (
+        "Você é o assistente de engenharia do Jonatan. Com base no contexto de git "
+        "fornecido (gerado pelo Jarvis) e, se preciso, lendo arquivos dos projetos, "
+        "escreva em português do Brasil um resumo curto e útil: o que mudou, o que "
+        "está pendente (branches não publicadas, alterações sem commit) e o que "
+        "merece atenção hoje. Use tópicos curtos por projeto. Não altere nada."
+    ),
+    "checagem": (
+        "Você verifica a saúde de um projeto do Jonatan numa cópia temporária. "
+        "Rode os testes{test} — se a suíte inteira for lenta demais, rode as pastas "
+        "mais relevantes. Não altere arquivos. Use comandos simples, um por chamada. "
+        "Responda em português do Brasil com um resumo curto do resultado e, se algo "
+        "falhou, a causa provável de cada falha. Não toque em caminhos fora deste "
+        "diretório (o comando de teste já está no PATH; use-o como está). Termine "
+        "com uma linha exatamente 'STATUS: OK' se tudo passou, 'STATUS: FALHOU' se "
+        "algum teste falhou, ou 'STATUS: NAO_RODOU' se não conseguiu rodar os testes."
     ),
 }
 
@@ -221,7 +247,12 @@ class DevTaskRunner:
         }
 
     async def submit(
-        self, kind: str, project: str, prompt: str, title: str = ""
+        self,
+        kind: str,
+        project: str,
+        prompt: str,
+        title: str = "",
+        routine: str = "",
     ) -> Task:
         kind = (kind or "codigo").strip().lower()
         if kind not in KINDS:
@@ -230,11 +261,11 @@ class DevTaskRunner:
         if not prompt:
             raise ValueError("pedido vazio")
         name = project
-        if kind != "pesquisa" or project:
+        if kind not in ("pesquisa", "resumo") or project:
             name = self.registry.resolve(project).name  # raises ProjectError
         self._check_budget()
         task = self.store.create(
-            kind=kind, project=name or "", prompt=prompt, title=title
+            kind=kind, project=name or "", prompt=prompt, title=title, routine=routine
         )
         self._audit("create", task)
         self._publish_update(task)
@@ -452,6 +483,21 @@ class DevTaskRunner:
                 "MultiEdit",
             ]
             rules = _RULES["revisao"]
+        elif task.kind == "checagem":
+            allowed = [*READ_TOOLS, "TodoWrite", *(f"Bash({c}:*)" for c in SAFE_BASH)]
+            if project and project.test_cmd:
+                allowed.append(f"Bash({project.test_cmd}:*)")
+            deny = [*DENY, "Edit", "Write", "MultiEdit", "WebFetch", "WebSearch"]
+            test = (
+                f" com {project.test_cmd}"
+                if project and project.test_cmd
+                else " (descubra como o projeto é testado)"
+            )
+            rules = _RULES["checagem"].format(test=test)
+        elif task.kind == "resumo":
+            allowed = list(READ_TOOLS)
+            deny = [*DENY, "Edit", "Write", "MultiEdit", "Bash", "WebFetch"]
+            rules = _RULES["resumo"]
         else:
             allowed = list(RESEARCH_TOOLS)
             deny = [*DENY, "Edit", "MultiEdit", "Bash"]
@@ -476,6 +522,9 @@ class DevTaskRunner:
             "--append-system-prompt",
             rules,
         ]
+        if task.kind == "resumo":
+            for p in self._scope(task):
+                argv += ["--add-dir", str(p.path)]
         if resume and task.session_id:
             argv += ["--resume", task.session_id]
         return argv
@@ -503,6 +552,19 @@ class DevTaskRunner:
         if task.kind == "revisao":
             assert project is not None
             return project.path  # read-only tools: the checkout is never modified
+        if task.kind == "checagem":
+            assert project is not None
+            self._update(task.id, current_step="preparando uma cópia temporária")
+            path = await asyncio.to_thread(
+                gitops.create_detached_worktree,
+                project.path,
+                Path(self.cfg.worktree_root).expanduser(),
+                project.name,
+                task.id,
+                project.base_branch,
+            )
+            self._update(task.id, worktree=str(path), base=project.base_branch)
+            return path
         path = Path(self.cfg.reports_dir).expanduser() / task.id
         path.mkdir(parents=True, exist_ok=True)
         self._update(task.id, worktree=str(path))
@@ -513,6 +575,8 @@ class DevTaskRunner:
         project = self.registry.resolve(task.project) if task.project else None
         resume = bool(task.followup and task.session_id)
         prompt = task.followup if resume else task.prompt
+        if not resume and task.kind in ("resumo", "revisao"):
+            prompt += await asyncio.to_thread(self._git_context, task)
         self._update(
             task_id,
             status="running",
@@ -624,12 +688,20 @@ class DevTaskRunner:
         if task.kind == "codigo":
             await self._finish_code(task_id, Path(cwd), project, fields)
         else:
+            summary = fields.get("summary", "")
+            body = summary
             if task.kind == "pesquisa":
-                report = Path(cwd) / "relatorio.md"
-                if report.is_file():
-                    fields["pr_url"] = str(
-                        report
-                    )  # the report location, shown as a link
+                full = Path(cwd) / "relatorio.md"
+                if full.is_file():
+                    body = full.read_text(encoding="utf-8", errors="replace")
+            if task.kind == "checagem":
+                fields["silent"] = "STATUS: OK" in summary.upper() and (
+                    "FALHOU" not in summary.upper()
+                )
+                if project is not None:
+                    await asyncio.to_thread(gitops.remove_worktree, project.path, cwd)
+            if body:
+                fields["report"] = self._save_report(task, body)
             self._update(task_id, status="done", ended_at=time.time(), **fields)
             done = self._require(task_id)
             self._audit("end", done)
@@ -692,6 +764,43 @@ class DevTaskRunner:
         waiting = self._require(task_id)
         self._audit("await_approval", waiting)
         self._remember(waiting, waiting.summary)
+
+    def _scope(self, task: Task) -> List[Project]:
+        """Projects a resumo covers: the named one, or all registered."""
+        if task.project:
+            found = self.registry.find(task.project)
+            return [found] if found else []
+        return self.registry.list()
+
+    def _git_context(self, task: Task) -> str:
+        from openjarvis.devtasks.context import repo_digest
+
+        projects = (
+            self._scope(task)
+            if task.kind == "resumo"
+            else ([self.registry.find(task.project)] if task.project else [])
+        )
+        digests = [repo_digest(p) for p in projects if p is not None]
+        if not digests:
+            return ""
+        return "\n\n## Contexto de git (gerado pelo Jarvis)\n" + "\n\n".join(digests)
+
+    def _save_report(self, task: Task, body: str) -> str:
+        """Keep the result as Markdown in reports_dir; returns the file path."""
+        folder = Path(self.cfg.reports_dir).expanduser()
+        folder.mkdir(parents=True, exist_ok=True)
+        now = _dt.datetime.now()
+        path = folder / (
+            f"{now:%Y-%m-%d-%H%M}-{task.kind}-{gitops.slugify(task.title)}.md"
+        )
+        where = f" · {task.project}" if task.project else ""
+        origin = f" · rotina “{task.routine}”" if task.routine else ""
+        path.write_text(
+            f"# {task.title}\n\n_{KIND_LABELS.get(task.kind, task.kind)}{where}"
+            f"{origin} · {now:%d/%m/%Y %H:%M} · tarefa {task.id}_\n\n{body.strip()}\n",
+            encoding="utf-8",
+        )
+        return str(path)
 
     async def _kill(self, task_id: str) -> None:
         proc = self._procs.get(task_id)

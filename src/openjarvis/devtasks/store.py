@@ -44,6 +44,9 @@ class Task:
     approval_id: str = ""
     error: str = ""
     followup: str = ""
+    report: str = ""  # path of the saved Markdown report (review/research/...)
+    routine: str = ""  # name of the routine that created the task, if any
+    silent: bool = False  # nothing worth notifying (e.g. a test check that passed)
     created_at: float = 0.0
     started_at: float = 0.0
     ended_at: float = 0.0
@@ -74,6 +77,9 @@ class TaskStore:
                 approval_id TEXT, error TEXT, followup TEXT,
                 created_at REAL, started_at REAL, ended_at REAL
             );
+            CREATE TABLE IF NOT EXISTS routine_state (
+                name TEXT PRIMARY KEY, last_fire REAL
+            );
             CREATE TABLE IF NOT EXISTS task_events (
                 task_id TEXT, seq INTEGER, ts REAL, kind TEXT, payload TEXT,
                 PRIMARY KEY (task_id, seq)
@@ -81,17 +87,35 @@ class TaskStore:
             CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
             """
         )
+        # Columns added after the first release of the table.
+        have = {r[1] for r in self._conn.execute("PRAGMA table_info(tasks)")}
+        for column, decl in (
+            ("report", "TEXT"),
+            ("routine", "TEXT"),
+            ("silent", "INTEGER"),
+        ):
+            if column not in have:
+                self._conn.execute(f"ALTER TABLE tasks ADD COLUMN {column} {decl}")
         self._conn.commit()
 
     # -- tasks -------------------------------------------------------------
 
-    def create(self, *, kind: str, project: str, prompt: str, title: str = "") -> Task:
+    def create(
+        self,
+        *,
+        kind: str,
+        project: str,
+        prompt: str,
+        title: str = "",
+        routine: str = "",
+    ) -> Task:
         task = Task(
             id=uuid.uuid4().hex[:8],
             kind=kind,
             project=project,
             prompt=prompt,
             title=title or prompt[:80],
+            routine=routine,
             created_at=time.time(),
         )
         row = task.to_dict()
@@ -111,6 +135,7 @@ class TaskStore:
         for key in ("cost_usd", "created_at", "started_at", "ended_at"):
             data[key] = data.get(key) or 0.0
         data["steps"] = data.get("steps") or 0
+        data["silent"] = bool(data.get("silent"))
         for key in _COLUMNS:
             if data.get(key) is None:
                 data[key] = ""
@@ -155,6 +180,24 @@ class TaskStore:
                 (since,),
             ).fetchone()
         return float(row[0] or 0.0)
+
+    # -- routines ----------------------------------------------------------
+
+    def last_fire(self, name: str) -> float:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_fire FROM routine_state WHERE name = ?", (name,)
+            ).fetchone()
+        return float(row[0]) if row else 0.0
+
+    def set_last_fire(self, name: str, ts: float) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO routine_state VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET last_fire = excluded.last_fire",
+                (name, ts),
+            )
+            self._conn.commit()
 
     # -- events ------------------------------------------------------------
 

@@ -125,6 +125,40 @@ async def deny_task(task_id: str, request: Request):
     return (await _aguard(_runner(request).deny(task_id))).to_dict()
 
 
+@router.get("/v1/tasks/{task_id}/report", response_class=PlainTextResponse)
+def task_report(task_id: str, request: Request):
+    runner = _runner(request)
+    task = runner.store.get(task_id)
+    if task is None or not task.report:
+        raise HTTPException(status_code=404, detail="Sem relatório")
+    from pathlib import Path
+
+    path = Path(task.report).resolve()
+    root = Path(runner.cfg.reports_dir).expanduser().resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="Relatório indisponível")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+@router.get("/v1/routines")
+def list_routines(request: Request):
+    scheduler = getattr(request.app.state, "devtask_routines", None)
+    return {"routines": scheduler.describe() if scheduler else []}
+
+
+@router.post("/v1/routines/{name}/run")
+async def run_routine(name: str, request: Request):
+    scheduler = getattr(request.app.state, "devtask_routines", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Rotinas desativadas")
+    try:
+        routine = scheduler.find(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Rotina não encontrada") from exc
+    tasks = await scheduler.fire(routine)
+    return {"tasks": [t.to_dict() for t in tasks]}
+
+
 @router.post("/v1/tasks/killswitch")
 async def killswitch(request: Request):
     stopped = await _runner(request).killswitch()
@@ -167,6 +201,11 @@ def setup_devtasks(app: Any) -> None:
         )
         await runner.start()
         app.state.devtasks = runner
+        from openjarvis.devtasks.routines import RoutineScheduler
+
+        scheduler = RoutineScheduler(runner, cfg.routines, cfg.timezone)
+        await scheduler.start()
+        app.state.devtask_routines = scheduler
         logger.info(
             "devtasks: %d project(s) registered%s",
             len(runner.registry.list()),
@@ -175,6 +214,9 @@ def setup_devtasks(app: Any) -> None:
 
     @app.on_event("shutdown")
     async def _stop_devtasks() -> None:
+        scheduler = getattr(app.state, "devtask_routines", None)
+        if scheduler is not None:
+            await scheduler.stop()
         runner = getattr(app.state, "devtasks", None)
         if runner is not None:
             await runner.stop()

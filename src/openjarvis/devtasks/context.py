@@ -66,3 +66,51 @@ def projects_context(projects: Iterable[Any]) -> str:
     if not items:
         return ""
     return "## Estado dos projetos (git, atualizado a cada minuto)\n" + "\n".join(items)
+
+
+def repo_digest(project: Any, since_hours: int = 24) -> str:
+    """Facts an agent needs to summarise or review a repository.
+
+    Computed by the server (plain ``git``) so read-only agents don't need
+    shell access: current branch, uncommitted changes, recent commits on every
+    branch and local branches not merged into the base, with commits ahead.
+    """
+    path = Path(project.path)
+    base = getattr(project, "base_branch", "main") or "main"
+    branch = _git(path, "rev-parse", "--abbrev-ref", "HEAD") or "?"
+    dirty = [line for line in _git(path, "status", "--porcelain").splitlines() if line]
+    recent = _git(
+        path,
+        "log",
+        "--all",
+        f"--since={since_hours} hours ago",
+        "--format=%h %ad [%D] %s",
+        "--date=format:%d/%m %H:%M",
+    ).splitlines()
+    branches = []
+    for name in _git(path, "branch", "--format=%(refname:short)").splitlines():
+        name = name.strip()
+        if not name or name == base:
+            continue
+        ahead = _git(path, "rev-list", "--count", f"{base}..{name}") or "?"
+        if ahead == "0":
+            continue
+        last = _git(path, "log", "-1", "--format=%cr: %s", name)
+        branches.append(
+            f"  - {name}: {ahead} commit(s) à frente de {base} (último {last})"
+        )
+    lines = [
+        f"### {project.name} ({path})",
+        f"Branch atual: {branch}. Base: {base}.",
+        f"Alterações sem commit: {len(dirty)}"
+        + (
+            " — " + ", ".join(d.split(maxsplit=1)[-1] for d in dirty[:15])
+            if dirty
+            else ""
+        ),
+        f"Commits nas últimas {since_hours} h ({len(recent)}):",
+        *(f"  - {c}" for c in recent[:40]),
+        f"Branches não incorporadas à {base} ({len(branches)}):",
+        *branches[:30],
+    ]
+    return "\n".join(lines)
