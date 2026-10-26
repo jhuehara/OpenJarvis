@@ -1234,6 +1234,9 @@ function addMessage(role, text = '') {
    Marcações na resposta: [[emocao: …]] e [[imagem|video: URL | legenda]]
    ===================================================================== */
 const GALAXY_PROMPT = [
+  'Você tem memória de longo prazo: o que o usuário conta sobre si e tudo o que vocês fazem juntos fica guardado automaticamente ' +
+  'e volta nas próximas conversas (perfil, fatos aprendidos e atividades recentes aparecem neste contexto). ' +
+  'Nunca diga que não consegue lembrar ou guardar algo; quando ele pedir para anotar, confirme que vai lembrar.',
   'Comece TODA resposta com uma marcação da emoção com que você responde, exatamente assim: [[emocao: X]] — ' +
   'onde X é um de: alegria, afeto, curiosidade, serenidade, tristeza, preocupacao, neutro. Escolha a que combina com o tom da conversa.',
   'Quando o usuário pedir uma imagem, foto, vídeo, ou pedir para mostrar/trazer algo visual: pesquise na internet e ' +
@@ -1322,9 +1325,18 @@ async function streamReply(messages, { onDelta, onEvent }) {
   return answer;
 }
 
+/* Registra a troca na memória pesquisável: o Jarvis lembra de tudo o que fez */
+function remember(question, answer) {
+  fetch('/v1/galaxy/remember', {
+    method: 'POST', headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ question: question.slice(0, 4000), answer: answer.slice(0, 20000) }),
+  }).catch(() => {});
+}
+
 /* Reação do universo depois de cada resposta */
 function afterReply(question, answer) {
   history.push({ role: 'assistant', content: answer });
+  remember(question, answer);
   const { clean, mood, media } = parseReply(answer);
   view.mood = mood || detectEmotion(clean);   // sem marcação: lê o tom do texto
   setState(view.mood, 12000);
@@ -1344,6 +1356,7 @@ async function send(text) {
     const reply = decision === 'yes' ? mediaBox.play() : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
     addMessage('bot', reply);
     history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+    if (decision !== 'unclear') remember(text, reply);
     if (decision !== 'yes' && ttsOn) speaker.say(reply);
     return;
   }
@@ -1985,6 +1998,8 @@ const talk = {
     if (decision) {
       const reply = decision === 'yes' ? 'Reproduzindo.' : decision === 'no' ? playPrompt.declineText() : playPrompt.unclearText();
       history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+      if (decision === 'yes') remember(text, `Reproduziu “${mediaBox.items[mediaBox.index]?.caption || 'a mídia'}”.`);
+      else if (decision === 'no') remember(text, reply);
       this.say('bot', reply);
       this.setPhase('busy', 'Jarvis falando…', '');
       speaker.say(reply);

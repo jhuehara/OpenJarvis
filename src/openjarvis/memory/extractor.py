@@ -25,6 +25,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "future conversations: preferences, identity, goals, ongoing projects, "
     "constraints, or relationships. Ignore one-off task details, small talk, "
     "and anything the assistant said about itself.\n\n"
+    "Use ONLY what is explicitly stated in the exchange below: never add facts "
+    "you know from anywhere else (account details, emails, earlier context). "
+    "You are not a participant in the conversation: do not answer or reply to "
+    "the user, even if the exchange is a question. A question by itself is "
+    "not a fact. Write each fact in the language the user wrote in.\n\n"
     "Respond with ONLY a JSON array of short fact strings (each under 200 "
     "characters). If there is nothing worth remembering, respond with []."
 )

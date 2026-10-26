@@ -10,6 +10,7 @@ plus lexical similarity between node texts.
 
 from __future__ import annotations
 
+import datetime as _dt
 import html
 import json
 import logging
@@ -176,8 +177,9 @@ def build_knowledge_graph(
     for doc_id, content, source, created in _read_rows(
         config_dir / "memory.db",
         "SELECT id, content, source, created_at FROM documents "
+        "WHERE source IS NULL OR source != ? "
         "ORDER BY created_at DESC LIMIT ?",
-        (limit,),
+        (ACTIVITY_SOURCE, limit),
     ):
         nid = f"memory:{doc_id}"
         label = Path(source).name if source else _short(content or "", 60)
@@ -537,7 +539,70 @@ def media_resolve(url: str):
         raise HTTPException(status_code=502, detail="Could not load that link") from exc
 
 
-# ---- Persona -----------------------------------------------------------------
+# ---- Persona and activity memory ---------------------------------------------
+
+# Memory-store source tag for the "everything Jarvis did" log. These entries
+# are retrieved into later prompts by the server's context injection; the
+# graph skips them because each exchange already is a conversation star.
+ACTIVITY_SOURCE = "jarvis:atividade"
+_LOCAL_TZ = _dt.timezone(_dt.timedelta(hours=-3), "BRT")
+_TAG_RE = re.compile(r"\[\[\s*([a-zà-ÿ]+)\s*:\s*([^\]]*?)\s*\]\]", re.IGNORECASE)
+
+
+def _local_now() -> _dt.datetime:
+    try:
+        from zoneinfo import ZoneInfo
+
+        return _dt.datetime.now(ZoneInfo("America/Sao_Paulo"))
+    except Exception:
+        return _dt.datetime.now(_LOCAL_TZ)
+
+
+def summarize_reply(text: str) -> str:
+    """Reply text without the page's [[...]] tags, noting any media shown."""
+    shown = []
+
+    def _tag(m: "re.Match[str]") -> str:
+        key = m.group(1).lower()
+        if key.startswith(("imag", "foto", "vid", "víd", "mus", "mús", "aud", "áud")):
+            kind = (
+                "imagem"
+                if key.startswith(("imag", "foto"))
+                else "música"
+                if key.startswith(("mus", "mús", "aud", "áud"))
+                else "vídeo"
+            )
+            caption = m.group(2).split("|", 1)[1].strip() if "|" in m.group(2) else ""
+            shown.append(f"{kind} “{caption}”" if caption else kind)
+        return ""
+
+    clean = " ".join(_TAG_RE.sub(_tag, text or "").split())
+    if shown:
+        clean += f" [mostrou: {', '.join(shown)}]"
+    return clean.strip()
+
+
+def _recent_activity(trace_db: Path, limit: int = 12) -> str:
+    rows = _read_rows(
+        trace_db,
+        "SELECT query, result, started_at FROM traces "
+        "WHERE query != '' ORDER BY started_at DESC LIMIT ?",
+        (limit,),
+    )
+    lines = []
+    for query, result, started in reversed(rows):
+        when = (
+            _dt.datetime.fromtimestamp(started, _local_now().tzinfo).strftime(
+                "%d/%m %H:%M"
+            )
+            if started
+            else "?"
+        )
+        lines.append(
+            f"- {when} — Usuário: {_short(query or '', 140)} → "
+            f"Jarvis: {_short(summarize_reply(result or ''), 180)}"
+        )
+    return "\n".join(lines)
 
 
 @galaxy_router.get("/v1/galaxy/persona")
@@ -564,7 +629,47 @@ def galaxy_persona(request: Request):
     except Exception as exc:
         logger.warning("galaxy persona prompt failed: %s", exc)
         prompt = ""
+    trace_store = getattr(request.app.state, "trace_store", None)
+    trace_db = getattr(trace_store, "_db_path", None)
+    recent = _recent_activity(
+        Path(trace_db) if trace_db else _config_dir() / "traces.db"
+    )
+    if recent:
+        prompt += (
+            "\n\n## Suas atividades recentes (horário de Brasília)\n"
+            "Use para lembrar do que já conversaram e fizeram juntos.\n" + recent
+        )
     return {"prompt": prompt}
+
+
+class RememberRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(default="", max_length=20000)
+
+
+@galaxy_router.post("/v1/galaxy/remember")
+def galaxy_remember(req: RememberRequest, request: Request):
+    """Log one exchange in the searchable memory so Jarvis can recall it later."""
+    backend = getattr(request.app.state, "memory_backend", None)
+    if backend is None:
+        try:
+            from openjarvis.tools.storage.sqlite import SQLiteMemory
+
+            backend = SQLiteMemory()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Memory unavailable") from exc
+    now = _local_now()
+    content = (
+        f"Em {now.strftime('%d/%m/%Y %H:%M')}, o usuário pediu: "
+        f"{' '.join(req.question.split())} — Jarvis respondeu: "
+        f"{summarize_reply(req.answer)}"
+    )
+    doc_id = backend.store(
+        content,
+        source=ACTIVITY_SOURCE,
+        metadata={"kind": "activity", "at": now.isoformat()},
+    )
+    return {"id": doc_id}
 
 
 # ---- Neural voices (Kokoro) --------------------------------------------------
@@ -645,9 +750,11 @@ def speech_synthesize(req: SynthesizeRequest):
 
 
 __all__ = [
+    "ACTIVITY_SOURCE",
     "NEURAL_VOICES",
     "build_knowledge_graph",
     "classify_media_url",
     "galaxy_router",
     "resolve_media",
+    "summarize_reply",
 ]

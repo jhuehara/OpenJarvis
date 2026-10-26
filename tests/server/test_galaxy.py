@@ -312,3 +312,69 @@ def test_galaxy_persona_includes_user_profile(tmp_path, monkeypatch):
     prompt = TestClient(app).get("/v1/galaxy/persona").json()["prompt"]
     assert "Você é o Jarvis." in prompt
     assert "Chame-o de Jonatan." in prompt
+
+
+def test_summarize_reply_strips_tags_and_notes_media():
+    from openjarvis.server.galaxy import summarize_reply
+
+    text = (
+        "[[emocao: alegria]] Aqui está a música.\n"
+        "[[musica: https://youtu.be/aqz-KE-bpKQ | Tom Jobim – Garota de Ipanema]]"
+    )
+    assert summarize_reply(text) == (
+        "Aqui está a música. [mostrou: música “Tom Jobim – Garota de Ipanema”]"
+    )
+
+
+def test_galaxy_remember_logs_activity(monkeypatch):
+    from openjarvis.server.galaxy import ACTIVITY_SOURCE
+
+    stored = []
+
+    class FakeBackend:
+        def store(self, content, *, source="", metadata=None):
+            stored.append((content, source, metadata))
+            return "doc-1"
+
+    app = FastAPI()
+    app.state.memory_backend = FakeBackend()
+    app.include_router(galaxy_router)
+    resp = TestClient(app).post(
+        "/v1/galaxy/remember",
+        json={
+            "question": "Toque Garota de Ipanema",
+            "answer": "[[emocao: alegria]] Pronto.",
+        },
+    )
+    assert resp.json() == {"id": "doc-1"}
+    content, source, metadata = stored[0]
+    assert source == ACTIVITY_SOURCE and metadata["kind"] == "activity"
+    assert "Toque Garota de Ipanema" in content and "Pronto." in content
+    assert "[[" not in content
+
+
+def test_graph_skips_activity_log(tmp_path):
+    from openjarvis.server.galaxy import ACTIVITY_SOURCE
+
+    mem = sqlite3.connect(tmp_path / "memory.db")
+    mem.execute(
+        "CREATE TABLE documents (id TEXT, content TEXT, source TEXT, created_at REAL)"
+    )
+    mem.executemany(
+        "INSERT INTO documents VALUES (?, ?, ?, 1.0)",
+        [("a", "Em 25/10 o usuário pediu…", ACTIVITY_SOURCE), ("b", "Notas", "n.md")],
+    )
+    mem.commit()
+    mem.close()
+    ids = {n["id"] for n in build_knowledge_graph(config_dir=tmp_path)["nodes"]}
+    assert "memory:b" in ids and "memory:a" not in ids
+
+
+def test_persona_lists_recent_activity(tmp_path, monkeypatch):
+    _make_stores(tmp_path)
+    monkeypatch.setattr("openjarvis.server.galaxy._config_dir", lambda: tmp_path)
+    app = FastAPI()
+    app.include_router(galaxy_router)
+    prompt = TestClient(app).get("/v1/galaxy/persona").json()["prompt"]
+    assert "Suas atividades recentes" in prompt
+    assert "Qual a capital da Austrália?" in prompt
