@@ -512,6 +512,11 @@ def create_app(
     # Restore SendBlue channel bindings from database on startup
     _restore_sendblue_bindings(app)
 
+    # Remote access (tailscale serve) only for the owner's tailnet login(s)
+    from openjarvis.server.tailnet_guard import TailnetGuard, allowed_from_config
+
+    app.add_middleware(TailnetGuard, allowed_logins=allowed_from_config(config))
+
     # Add security headers middleware
     try:
         from openjarvis.server.middleware import create_security_middleware

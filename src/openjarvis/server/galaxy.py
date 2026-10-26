@@ -372,6 +372,42 @@ async def galaxy_page():
     )
 
 
+@galaxy_router.get("/galaxy/manifest.webmanifest")
+async def galaxy_manifest():
+    """Web app manifest: "Adicionar à Tela de Início" opens Jarvis full screen."""
+    from fastapi.responses import JSONResponse
+
+    icons = "/galaxy/assets/icons"
+    return JSONResponse(
+        {
+            "name": "J.A.R.V.I.S.",
+            "short_name": "Jarvis",
+            "description": "Seu assistente pessoal — conversa, voz, memória e agentes.",
+            "lang": "pt-BR",
+            "start_url": "/galaxy",
+            "scope": "/galaxy",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#020409",
+            "theme_color": "#020409",
+            "icons": [
+                {
+                    "src": f"{icons}/icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                },
+                {
+                    "src": f"{icons}/icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                },
+                {"src": f"{icons}/icon.svg", "sizes": "any", "type": "image/svg+xml"},
+            ],
+        },
+        media_type="application/manifest+json",
+    )
+
+
 @galaxy_router.get("/galaxy/assets/{asset_path:path}")
 async def galaxy_asset(asset_path: str):
     """Serve the page's vendored scripts."""
@@ -731,6 +767,168 @@ def delegation_rules(projects: Iterable[Any]) -> str:
     )
 
 
+# ---- "Meu dia": what happened on a given day -----------------------------------
+
+_WEEKDAYS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
+_MONTHS = (
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+)
+_MEDIA_RE = re.compile(r"\[mostrou: (.+?)\]\s*$")
+
+
+def build_day(
+    day: _dt.date,
+    *,
+    config_dir: Path,
+    trace_db: Optional[Path] = None,
+    tasks_db: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Timeline of one local day: conversations, agent tasks and learned facts."""
+    tz = _local_now().tzinfo
+    start = _dt.datetime.combine(day, _dt.time.min, tzinfo=tz).timestamp()
+    end = start + 86400
+    items: List[Dict[str, Any]] = []
+
+    for trace_id, query, result, started in _read_rows(
+        trace_db or (config_dir / "traces.db"),
+        "SELECT trace_id, query, result, started_at FROM traces "
+        "WHERE started_at >= ? AND started_at < ? AND query != '' ORDER BY started_at",
+        (start, end),
+    ):
+        reply = summarize_reply(result or "")
+        media = _MEDIA_RE.search(reply)
+        items.append(
+            {
+                "type": "conversa",
+                "at": started,
+                "title": _short(query or "", 160),
+                "detail": _short(_MEDIA_RE.sub("", reply), 420),
+                "media": media.group(1) if media else "",
+                "id": trace_id,
+            }
+        )
+
+    for row in _read_rows(
+        tasks_db or (config_dir / "tasks.db"),
+        "SELECT id, kind, project, title, status, summary, cost_usd, pr_url, "
+        "created_at, ended_at, routine FROM tasks "
+        "WHERE (created_at >= ? AND created_at < ?) "
+        "OR (ended_at >= ? AND ended_at < ?) "
+        "ORDER BY created_at",
+        (start, end, start, end),
+    ):
+        (
+            task_id,
+            kind,
+            project,
+            title,
+            status,
+            summary,
+            cost,
+            pr_url,
+            created,
+            ended,
+            routine,
+        ) = row
+        items.append(
+            {
+                "type": "tarefa",
+                "at": created if start <= (created or 0) < end else ended,
+                "title": title or "",
+                "detail": _short(
+                    re.sub(r"\n?STATUS:.*$", "", summary or "", flags=re.S), 420
+                ),
+                "kind": kind,
+                "project": project or "",
+                "status": status,
+                "cost_usd": cost or 0.0,
+                "pr_url": pr_url if (pr_url or "").startswith("http") else "",
+                "routine": routine or "",
+                "id": task_id,
+            }
+        )
+
+    facts_path = config_dir / "memory_facts.jsonl"
+    if facts_path.is_file():
+        for line in facts_path.read_text(encoding="utf-8").splitlines():
+            try:
+                fact = json.loads(line)
+            except ValueError:
+                continue
+            ts = float(fact.get("created_at") or 0)
+            if start <= ts < end and fact.get("trust", "") != "untrusted":
+                items.append(
+                    {
+                        "type": "aprendizado",
+                        "at": ts,
+                        "title": str(fact.get("text", "")),
+                    }
+                )
+
+    items.sort(key=lambda it: it["at"] or 0)
+    today = _local_now().date()
+    counts: Dict[str, int] = defaultdict(int)
+    for it in items:
+        counts[it["type"]] += 1
+    label = f"{_WEEKDAYS[day.weekday()]}, {day.day} de {_MONTHS[day.month - 1]}"
+    if day == today:
+        label = f"hoje, {label}"
+    elif day == today - _dt.timedelta(days=1):
+        label = f"ontem, {label}"
+    return {
+        "date": day.isoformat(),
+        "label": label,
+        "items": items,
+        "counts": dict(counts),
+        "cost_usd": round(sum(it.get("cost_usd", 0) for it in items), 4),
+        "prev": (day - _dt.timedelta(days=1)).isoformat(),
+        "next": (day + _dt.timedelta(days=1)).isoformat() if day < today else None,
+    }
+
+
+def parse_day(text: str) -> _dt.date:
+    """'', 'hoje', 'ontem', 'anteontem' or YYYY-MM-DD (local time)."""
+    today = _local_now().date()
+    t = (text or "").strip().lower()
+    if t in ("", "hoje", "today"):
+        return today
+    if t in ("ontem", "yesterday"):
+        return today - _dt.timedelta(days=1)
+    if t == "anteontem":
+        return today - _dt.timedelta(days=2)
+    return _dt.date.fromisoformat(t)
+
+
+@galaxy_router.get("/v1/galaxy/day")
+def galaxy_day(request: Request, date: str = ""):
+    """Everything that happened on a day — for the "Meu dia" view."""
+    try:
+        day = parse_day(date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="data inválida") from exc
+    trace_store = getattr(request.app.state, "trace_store", None)
+    trace_db = getattr(trace_store, "_db_path", None)
+    runner = getattr(request.app.state, "devtasks", None)
+    tasks_db = getattr(getattr(runner, "store", None), "_path", None)
+    return build_day(
+        day,
+        config_dir=_config_dir(),
+        trace_db=Path(trace_db) if trace_db else None,
+        tasks_db=Path(tasks_db) if tasks_db else None,
+    )
+
+
 class RememberRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     answer: str = Field(default="", max_length=20000)
@@ -840,6 +1038,8 @@ def speech_synthesize(req: SynthesizeRequest):
 
 __all__ = [
     "ACTIVITY_SOURCE",
+    "build_day",
+    "parse_day",
     "NEURAL_VOICES",
     "build_knowledge_graph",
     "classify_media_url",

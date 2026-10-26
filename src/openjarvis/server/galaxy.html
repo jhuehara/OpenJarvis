@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>J.A.R.V.I.S. — Universo</title>
+<link rel="manifest" href="/galaxy/manifest.webmanifest">
+<link rel="icon" href="/galaxy/assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/galaxy/assets/icons/icon-180.png">
+<meta name="theme-color" content="#020409">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
 <style>
   :root {
     --bg: #020409;
@@ -113,6 +121,33 @@
   .detail .close { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; }
 
   .toggle-chat { display: none; }
+
+  /* ---------- Meu dia ---------- */
+  .myday { position: fixed; inset: 14px; z-index: 8; display: flex; flex-direction: column; background: rgba(5, 8, 13, .9); border: 1px solid var(--line); border-radius: 16px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 30px 80px rgba(0,0,0,.6); animation: media-in .35s ease; }
+  .myday[hidden] { display: none; }
+  .md-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .md-head h2 { font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); }
+  .md-date { flex: 1; min-width: 160px; font-size: 17px; font-weight: 600; text-align: center; }
+  .md-sum { padding: 10px 18px 0; font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .md-chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; background: transparent; color: var(--muted); font: 500 12px var(--display); letter-spacing: .08em; }
+  .md-chip.on { color: var(--text); border-color: rgba(var(--accent-rgb), .6); background: rgba(var(--accent-rgb), .1); }
+  .md-body { flex: 1; overflow-y: auto; padding: 12px 18px 24px; }
+  .md-hour { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .2em; margin: 14px 0 6px; }
+  .md-item { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background .15s; }
+  .md-item:hover { background: rgba(255,255,255,.04); }
+  .md-item .md-ic { font-size: 15px; line-height: 1.3; }
+  .md-item b { font-weight: 500; font-size: 15px; line-height: 1.35; display: block; }
+  .md-item small { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 2px; letter-spacing: .03em; }
+  .md-item .md-det { display: none; margin-top: 6px; color: #d8cbb4; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+  .md-item.open .md-det { display: block; }
+  .md-empty { margin: 60px auto; text-align: center; color: var(--muted); line-height: 1.6; }
+  @media (max-width: 760px) {
+    .myday { inset: 0; border-radius: 0; }
+    .md-head { padding: 12px; flex-wrap: nowrap; padding-top: max(12px, env(safe-area-inset-top)); }
+    .md-head h2 { display: none; }
+    .md-date { min-width: 0; font-size: 15px; }
+    .md-body { padding: 8px 12px 24px; }
+  }
 
   /* ---------- Avisos no celular (Telegram) ---------- */
   .vp-tg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
@@ -407,6 +442,18 @@
 </div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<section class="myday" id="myday" hidden aria-label="Meu dia">
+  <div class="md-head">
+    <h2>Meu dia</h2>
+    <button class="icon-btn" id="mdPrev" aria-label="Dia anterior">◀</button>
+    <div class="md-date" id="mdDate">…</div>
+    <button class="icon-btn" id="mdNext" aria-label="Próximo dia">▶</button>
+    <button class="icon-btn" id="mdClose" aria-label="Fechar">✕</button>
+  </div>
+  <div class="md-sum" id="mdSum"></div>
+  <div class="md-body" id="mdBody"></div>
+</section>
+
 <div class="tg-modal" id="tgModal" hidden role="dialog" aria-label="Avisos no celular">
   <div class="tg-card">
     <h3>Avisos no celular</h3>
@@ -480,6 +527,9 @@
     </button>
     <button class="icon-btn" id="voiceBtn" title="Escolher a voz do Jarvis" aria-label="Escolher voz" aria-expanded="false" aria-controls="voicePanel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M18.5 6.5a4 4 0 0 1 0 5"/><path d="M21 4a8 8 0 0 1 0 10"/></svg>
+    </button>
+    <button class="icon-btn" id="dayBtn" title="Meu dia" aria-label="Meu dia">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg>
     </button>
     <button class="icon-btn" id="actBtn" title="Atividades dos agentes" aria-label="Atividades dos agentes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="19.5" cy="7" r="1.6" fill="currentColor"/></svg>
@@ -572,7 +622,7 @@ const R = 10; // raio da esfera holográfica
    ===================================================================== */
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 760 ? 1.5 : 2));   // celular: menos pixels, mais bateria
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NoToneMapping; // mantém o âmbar saturado do holograma
 
@@ -1422,6 +1472,7 @@ const GALAXY_PROMPT = [
   'ou, para músicas, [[musica: URL | artista – música]] (prefira o vídeo/áudio oficial no YouTube ou o SoundCloud). ' +
   'Use apenas URLs reais que você encontrou na pesquisa. Para imagens prefira o link direto do arquivo (por exemplo upload.wikimedia.org/…jpg) ' +
   'ou a página onde a imagem está; para vídeos prefira links do YouTube. Nunca invente URLs.',
+  'Quando ele pedir para ver o dia (o que fizeram hoje, como foi ontem, o histórico de um dia), responda com um resumo curto e inclua [[abrir: dia | hoje]] (ou ontem, ou a data AAAA-MM-DD).',
   'Não comente as marcações nem mostre as URLs no texto; apenas diga, com naturalidade, que está mostrando a imagem, o vídeo ou a música. ' +
   'Não pergunte se o usuário quer reproduzir: a interface pergunta sozinha. Quando mostrar mídia, não inclua links nem uma seção de fontes no texto. ' +
   'Nunca afirme que já está tocando ou reproduzindo algo: quem inicia a reprodução é a interface, depois da confirmação do usuário.',
@@ -1488,6 +1539,7 @@ function parseReply(text) {
     } else if (key === 'abrir' || key === 'mostrar') {
       const [target, focus] = value.split('|').map(x => x.trim());
       if (/ativid|agente|tarefa/i.test(target)) open = { view: 'atividades', focus: focus || '' };
+      else if (/\bdia\b|hoje|ontem|agenda|resumo do dia/i.test(target)) open = { view: 'dia', focus: focus || (/ontem/i.test(target) ? 'ontem' : 'hoje') };
     } else if (/^(imagem|image|foto|v[ií]deo|video|m[uú]sica|music|[aá]udio|audio)$/.test(key)) {
       const [url, ...cap] = value.split('|');
       const kind = /^(imagem|image|foto)$/.test(key) ? 'image' : /^(m[uú]sica|music|[aá]udio|audio)$/.test(key) ? 'audio' : 'video';
@@ -1559,7 +1611,8 @@ function afterReply(question, answer) {
   setState(view.mood, 12000);
   illuminate(`${question} ${clean}`, 1.6);
   if (media.length) mediaBox.open(media);
-  if (open) activity.open(open.focus);
+  if (open?.view === 'dia') myDay.open(open.focus);
+  else if (open) activity.open(open.focus);
   if (tasks.length) setTimeout(() => agents.proposeDelegation(tasks[0]), 300);
   setTimeout(loadGraph, 1200); // a nova conversa nasce como estrela
   // Resposta só com mídia: ainda assim o Jarvis diz algo
@@ -2900,6 +2953,62 @@ const agents = {
       (t.error ? ` — ${t.error.slice(0, 120)}` : '')).join('\n');
   },
 };
+
+/* Meu dia: linha do tempo de um dia (conversas, tarefas dos agentes, aprendizados) */
+const myDay = {
+  el: document.getElementById('myday'), data: null, filter: 'all',
+  ICON: { conversa: '💬', tarefa: '🤖', aprendizado: '✨' },
+  isOpen() { return !this.el.hidden; },
+  async open(date = 'hoje') {
+    activity.close();
+    this.el.hidden = false;
+    await this.load(date);
+  },
+  close() { this.el.hidden = true; },
+  async load(date) {
+    document.getElementById('mdBody').innerHTML = '<div class="md-empty">carregando…</div>';
+    try { this.data = await agents.api(`/v1/galaxy/day?date=${encodeURIComponent(date)}`); }
+    catch (err) { document.getElementById('mdBody').innerHTML = `<div class="md-empty">${escapeHtml(err.message)}</div>`; return; }
+    this.render();
+  },
+  render() {
+    const d = this.data;
+    document.getElementById('mdDate').textContent = d.label;
+    document.getElementById('mdNext').disabled = !d.next;
+    const c = d.counts || {};
+    const chip = (key, label) => `<button class="md-chip${this.filter === key ? ' on' : ''}" data-f="${key}">${label}</button>`;
+    document.getElementById('mdSum').innerHTML =
+      chip('all', 'tudo') + chip('conversa', `${c.conversa || 0} conversas`) + chip('tarefa', `${c.tarefa || 0} tarefas`) +
+      chip('aprendizado', `${c.aprendizado || 0} aprendizados`) + (d.cost_usd ? `<span>· agentes US$ ${d.cost_usd.toFixed(2)}</span>` : '');
+    const items = d.items.filter(it => this.filter === 'all' || it.type === this.filter);
+    if (!items.length) { document.getElementById('mdBody').innerHTML = '<div class="md-empty">Nada registrado neste dia.</div>'; return; }
+    let hour = -1, html = '';
+    for (const it of items) {
+      const dt = new Date(it.at * 1000), h = dt.getHours();
+      if (h !== hour) { hour = h; html += `<div class="md-hour">${String(h).padStart(2, '0')}h</div>`; }
+      const time = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      let meta = time;
+      if (it.type === 'tarefa') meta += ` · ${KIND_LABEL[it.kind] || it.kind}${it.project ? ' · ' + escapeHtml(it.project) : ''} · ${TASK_LABEL[it.status] || it.status}${it.routine ? ' · rotina' : ''}`;
+      if (it.media) meta += ` · mostrou ${escapeHtml(it.media)}`;
+      html += `<div class="md-item" data-type="${it.type}" data-id="${escapeHtml(it.id || '')}">
+        <span class="md-ic">${this.ICON[it.type] || '•'}</span>
+        <div><b>${escapeHtml(it.title)}</b><small>${meta}</small>${it.detail ? `<div class="md-det">${escapeHtml(it.detail)}</div>` : ''}</div></div>`;
+    }
+    document.getElementById('mdBody').innerHTML = html;
+  },
+};
+document.getElementById('dayBtn').onclick = () => (myDay.isOpen() ? myDay.close() : myDay.open('hoje'));
+document.getElementById('mdClose').onclick = () => myDay.close();
+document.getElementById('mdPrev').onclick = () => myDay.data && myDay.load(myDay.data.prev);
+document.getElementById('mdNext').onclick = () => myDay.data?.next && myDay.load(myDay.data.next);
+document.getElementById('mdSum').addEventListener('click', ev => { const b = ev.target.closest('[data-f]'); if (b) { myDay.filter = b.dataset.f; myDay.render(); } });
+document.getElementById('mdBody').addEventListener('click', ev => {
+  const it = ev.target.closest('.md-item');
+  if (!it) return;
+  if (it.dataset.type === 'tarefa' && it.dataset.id) { myDay.close(); activity.open(it.dataset.id); }
+  else it.classList.toggle('open');
+});
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && myDay.isOpen()) { ev.stopImmediatePropagation(); myDay.close(); } }, true);
 
 /* Configuração do Telegram (o token vai direto ao servidor, nunca ao chat) */
 const telegramSetup = {

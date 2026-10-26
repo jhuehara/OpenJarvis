@@ -1193,6 +1193,9 @@ class ServerConfig:
     port: int = 8000
     agent: str = "orchestrator"
     model: str = ""
+    # Tailscale logins allowed to use Jarvis remotely via `tailscale serve`
+    # (comma-separated); empty = remote access closed. See server/tailnet_guard.py
+    remote_allowed_logins: str = ""
     workers: int = 1
     cors_origins: list = field(
         default_factory=lambda: [
