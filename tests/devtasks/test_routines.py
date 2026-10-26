@@ -72,3 +72,20 @@ def test_star_project_fans_out_and_disabled_never_runs(tmp_path):
     assert runner.submitted[0][2] == "Rev — A"
     desc = {d["name"]: d for d in sched.describe()}
     assert desc["Off"]["next_fire"] is None
+
+
+def test_skipped_routine_is_reported(tmp_path):
+    class Refusing(FakeRunner):
+        async def submit(self, *a, **kw):
+            raise RuntimeError("Teto diário atingido")
+
+    runner = Refusing(tmp_path)
+    sched = RoutineScheduler(runner, [_routine(project="X")], "UTC")
+    skipped = []
+
+    async def on_skip(name, project, reason):
+        skipped.append((name, project, reason))
+
+    sched.on_skip = on_skip
+    assert asyncio.run(sched.fire(sched.routines[0])) == []
+    assert skipped == [("Resumo", "X", "Teto diário atingido")]

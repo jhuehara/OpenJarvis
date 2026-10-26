@@ -378,3 +378,22 @@ def test_persona_lists_recent_activity(tmp_path, monkeypatch):
     prompt = TestClient(app).get("/v1/galaxy/persona").json()["prompt"]
     assert "Suas atividades recentes" in prompt
     assert "Qual a capital da Austrália?" in prompt
+
+
+def test_graph_includes_agent_tasks_chained_by_project(tmp_path):
+    from openjarvis.devtasks.store import TaskStore
+
+    store = TaskStore(tmp_path / "tasks.db")
+    a = store.create(kind="codigo", project="MyOps", prompt="cria login", title="Login")
+    b = store.create(kind="revisao", project="MyOps", prompt="revisa login")
+    store.update(a.id, status="done", summary="feito")
+    graph = build_knowledge_graph(config_dir=tmp_path)
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    assert nodes[f"task:{a.id}"]["kind"] == "task"
+    assert nodes[f"task:{a.id}"]["status"] == "done"
+    assert nodes["hub:tasks"]["label"] == "Agentes"
+    pairs = {(e["source"], e["target"], e["kind"]) for e in graph["edges"]}
+    assert any(
+        k == "same_project" and {s, t} == {f"task:{a.id}", f"task:{b.id}"}
+        for s, t, k in pairs
+    )

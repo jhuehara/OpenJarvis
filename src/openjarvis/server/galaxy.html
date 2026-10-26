@@ -466,6 +466,7 @@
   <h3 id="dTitle"></h3>
   <p id="dBody"></p>
   <div class="meta" id="dMeta"></div>
+  <button class="pill-btn" id="dOpen" hidden style="margin-top:10px">Ver nas atividades</button>
 </div>
 
 <section class="chat" id="chat">
@@ -926,6 +927,7 @@ const KIND = {
   entity:       { label: 'Conceito',   size: 1.6, white: 0.5 },
   tool:         { label: 'Ferramenta', size: 1.7, white: 0.2 },
   skill:        { label: 'Habilidade', size: 1.7, white: 0.6 },
+  task:         { label: 'Tarefa de agente', size: 1.8, white: 0.45 },
 };
 
 const knowledge = {
@@ -1328,7 +1330,10 @@ function showDetail(i) {
   document.getElementById('dTitle').textContent = n.label;
   document.getElementById('dBody').textContent = n.detail || (n.kind === 'hub' ? `${n.count} estrelas nesta constelação.` : '');
   const when = n.created_at ? new Date(n.created_at * 1000).toLocaleString('pt-BR') : '';
-  document.getElementById('dMeta').textContent = [`${links.length} conexões`, when, n.source].filter(Boolean).join(' · ');
+  document.getElementById('dMeta').textContent = [`${links.length} conexões`, when, n.source, n.project, n.status && TASK_LABEL[n.status]].filter(Boolean).join(' · ');
+  const open = document.getElementById('dOpen');
+  open.hidden = n.kind !== 'task';
+  open.onclick = () => { detail.classList.remove('show'); activity.open(n.task_id); };
   detail.classList.add('show');
   // Acende a estrela e sua vizinhança
   knowledge.hi[i] = 2;
@@ -2704,7 +2709,7 @@ const agents = {
   async api(path, opts = {}) {
     const r = await fetch(path, { ...opts, headers: headers({ 'Content-Type': 'application/json', ...(opts.headers || {}) }) });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || `erro ${r.status}`);
+    if (!r.ok) { const err = new Error(data.detail || `erro ${r.status}`); err.status = r.status; throw err; }
     return data;
   },
 
@@ -2853,15 +2858,30 @@ const agents = {
       unclear: 'Não entendi. Delego ao agente? Responda sim ou não.',
       yes: async () => {
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
-        const t = await this.api('/v1/tasks', { method: 'POST', body: JSON.stringify(spec) });
-        this.upsert(t, { silent: true });
-        this.events.set(t.id, []);
+        try {
+          await this.createTask(spec);
+        } catch (err) {
+          if (err.status !== 402) throw err;
+          // Teto diário atingido: o Jonatan decide se roda mesmo assim
+          return { text: `${err.message}.`, after: () => confirmPrompt.ask({
+            kind: 'budget', question: 'Quer que eu rode mesmo assim, passando do teto de hoje?',
+            yesLabel: 'Rodar mesmo assim', noLabel: 'Deixar para amanhã',
+            yes: async () => { await this.createTask({ ...spec, force: true }); return { text: `Combinado: o agente começou${where}, mesmo acima do teto.` }; },
+            no: () => ({ text: 'Tudo bem, não rodei. Amanhã o teto zera.' }),
+          }) };
+        }
         return { text: `Combinado: o agente começou${where}. Te aviso quando terminar.` };
       },
       no: () => ({ text: 'Tudo bem, não deleguei.' }),
     });
   },
 
+  async createTask(spec) {
+    const t = await this.api('/v1/tasks', { method: 'POST', body: JSON.stringify(spec) });
+    this.upsert(t, { silent: true });
+    this.events.set(t.id, []);
+    return t;
+  },
   async approve(id) { const t = await this.api(`/v1/tasks/${id}/approve`, { method: 'POST' }); this.upsert(t); return t; },
   async deny(id) { const t = await this.api(`/v1/tasks/${id}/deny`, { method: 'POST' }); this.upsert(t); return t; },
   async cancel(id) { const t = await this.api(`/v1/tasks/${id}/cancel`, { method: 'POST' }); this.upsert(t); return t; },
@@ -2954,9 +2974,10 @@ async function localCommand(text) {
   return null;
 }
 
-/* Satélites discretos: um por tarefa ativa, orbitando a esfera */
+/* Satélites discretos: um por tarefa ativa (e as que acabaram de terminar),
+   cada um no seu plano de órbita, com anel tênue e cauda de cometa */
 const satellites = {
-  group: new THREE.Group(), items: new Map(),
+  group: new THREE.Group(), items: new Map(), TRAIL: 28, LINGER_MS: 9000,
   texture: (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -2965,36 +2986,76 @@ const satellites = {
     return new THREE.CanvasTexture(c);
   })(),
   init() { scene.add(this.group); frameHooks.push(dt => this.tick(dt)); },
+
+  visible() {
+    const now = Date.now();
+    return [...agents.tasks.values()].filter(t => ACTIVE.has(t.status) ||
+      (['done', 'failed'].includes(t.status) && t.ended_at && now - t.ended_at * 1000 < this.LINGER_MS && !t.silent));
+  },
+
+  make(t, i) {
+    const pivot = new THREE.Group();
+    pivot.rotation.set(0.35 + (i % 3) * 0.32, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.4);
+    const r = R * (1.24 + (i % 4) * 0.05);
+    const mat = c => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const ringPts = [];
+    for (let k = 0; k <= 96; k++) { const a = (k / 96) * Math.PI * 2; ringPts.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)); }
+    const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ringPts), mat(0xffffff));
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.TRAIL * 3), 3));
+    trailGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.TRAIL * 3), 3));
+    const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    sprite.userData.taskId = t.id;
+    pivot.add(ring, trail, sprite);
+    this.group.add(pivot);
+    return { pivot, ring, trail, sprite, r, angle: Math.random() * Math.PI * 2, speed: 0.16 + Math.random() * 0.08, pulse: 0.8, opacity: 0, color: new THREE.Color(TASK_COLORS[t.status]) };
+  },
+
   sync() {
-    const act = agents.active();
-    const ids = new Set(act.map(t => t.id));
-    for (const [id, s] of this.items) if (!ids.has(id)) { s.fading = true; }
-    act.forEach((t, i) => {
+    const vis = this.visible();
+    const ids = new Set(vis.map(t => t.id));
+    for (const [id, s] of this.items) if (!ids.has(id)) s.fading = true;
+    vis.forEach((t, i) => {
       let s = this.items.get(t.id);
-      if (!s) {
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
-        sprite.scale.setScalar(0.9);
-        sprite.userData.taskId = t.id;
-        s = { sprite, angle: Math.random() * Math.PI * 2, tilt: (i % 3 - 1) * 0.5 + 0.25, speed: 0.18 + Math.random() * 0.1, pulse: 0, opacity: 0 };
-        this.items.set(t.id, s);
-        this.group.add(sprite);
-      }
+      if (!s) { s = this.make(t, i); this.items.set(t.id, s); }
       s.fading = false;
-      s.sprite.material.color.set(TASK_COLORS[t.status]);
+      const finished = t.status === 'done' || t.status === 'failed';
+      if (finished && !s.finished) { s.finished = true; s.pulse = 1.6; }   // brilho de conclusão
+      s.color.set(TASK_COLORS[t.status]);
+      s.speed = t.status === 'running' ? 0.22 : t.status === 'awaiting_approval' ? 0.08 : 0.14;
     });
   },
-  flash(id) { const s = this.items.get(id); if (s) s.pulse = 1; },
+  flash(id) { const s = this.items.get(id); if (s) s.pulse = Math.max(s.pulse, 1); },
+
   tick(dt) {
+    if (this.items.size && Math.random() < dt / 2) this.sync();   // some quem já passou do tempo
     for (const [id, s] of this.items) {
       s.angle += dt * s.speed;
-      s.pulse *= Math.exp(-dt * 2.5);
-      const target = s.fading ? 0 : 0.55 + s.pulse * 0.45;
-      s.opacity += (target - s.opacity) * (1 - Math.exp(-dt * 3));
-      const r = R * 1.28;
-      s.sprite.position.set(Math.cos(s.angle) * r, Math.sin(s.angle) * r * Math.sin(s.tilt), Math.sin(s.angle) * r * Math.cos(s.tilt));
+      s.pulse *= Math.exp(-dt * 2.2);
+      const target = s.fading ? 0 : (s.finished ? 0.75 : 0.55) + s.pulse * 0.45;
+      s.opacity += (target - s.opacity) * (1 - Math.exp(-dt * (s.fading ? 1.2 : 3)));
+      s.sprite.position.set(Math.cos(s.angle) * s.r, 0, Math.sin(s.angle) * s.r);
+      s.sprite.material.color.copy(s.color);
       s.sprite.material.opacity = s.opacity;
-      s.sprite.scale.setScalar(0.75 + s.pulse * 0.6);
-      if (s.fading && s.opacity < 0.02) { this.group.remove(s.sprite); s.sprite.material.dispose(); this.items.delete(id); }
+      s.sprite.scale.setScalar(0.8 + s.pulse * 0.7);
+      s.ring.material.color.copy(s.color);
+      s.ring.material.opacity = s.opacity * 0.16;
+      // cauda: arco atrás do satélite, esmaecendo
+      const pos = s.trail.geometry.attributes.position.array, col = s.trail.geometry.attributes.color.array;
+      for (let k = 0; k < this.TRAIL; k++) {
+        const a = s.angle - k * 0.022, f = 1 - k / this.TRAIL;
+        pos[k * 3] = Math.cos(a) * s.r; pos[k * 3 + 1] = 0; pos[k * 3 + 2] = Math.sin(a) * s.r;
+        col[k * 3] = s.color.r * f * f; col[k * 3 + 1] = s.color.g * f * f; col[k * 3 + 2] = s.color.b * f * f;
+      }
+      s.trail.geometry.attributes.position.needsUpdate = true;
+      s.trail.geometry.attributes.color.needsUpdate = true;
+      s.trail.material.opacity = s.opacity * 0.9;
+      if (s.fading && s.opacity < 0.02) {
+        this.group.remove(s.pivot);
+        s.pivot.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+        this.items.delete(id);
+      }
     }
   },
   pick(ev) {
@@ -3002,7 +3063,8 @@ const satellites = {
     const rect = canvas.getBoundingClientRect();
     mouse.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(mouse, camera);
-    const hit = raycaster.intersectObjects(this.group.children)[0];
+    const sprites = [...this.items.values()].map(s => s.sprite);
+    const hit = raycaster.intersectObjects(sprites)[0];
     return hit?.object.userData.taskId || null;
   },
 };

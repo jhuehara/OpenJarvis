@@ -28,6 +28,7 @@ class CreateTaskRequest(BaseModel):
     project: str = ""
     prompt: str = Field(min_length=1, max_length=8000)
     title: str = Field(default="", max_length=200)
+    force: bool = False  # user confirmed running over the daily budget
 
 
 class TelegramSetupRequest(BaseModel):
@@ -36,6 +37,7 @@ class TelegramSetupRequest(BaseModel):
 
 class FollowupRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=8000)
+    force: bool = False
 
 
 def _runner(request: Request) -> DevTaskRunner:
@@ -90,7 +92,9 @@ def list_tasks(request: Request, limit: int = 30):
 @router.post("/v1/tasks", status_code=201)
 async def create_task(req: CreateTaskRequest, request: Request):
     runner = _runner(request)
-    task = await _aguard(runner.submit(req.kind, req.project, req.prompt, req.title))
+    task = await _aguard(
+        runner.submit(req.kind, req.project, req.prompt, req.title, force=req.force)
+    )
     return task.to_dict()
 
 
@@ -116,7 +120,9 @@ async def cancel_task(task_id: str, request: Request):
 
 @router.post("/v1/tasks/{task_id}/followup")
 async def followup_task(task_id: str, req: FollowupRequest, request: Request):
-    return (await _aguard(_runner(request).followup(task_id, req.prompt))).to_dict()
+    return (
+        await _aguard(_runner(request).followup(task_id, req.prompt, force=req.force))
+    ).to_dict()
 
 
 @router.post("/v1/tasks/{task_id}/approve")
@@ -245,7 +251,6 @@ def setup_devtasks(app: Any) -> None:
         from openjarvis.devtasks.routines import RoutineScheduler
 
         scheduler = RoutineScheduler(runner, cfg.routines, cfg.timezone)
-        await scheduler.start()
         app.state.devtask_routines = scheduler
         from openjarvis.devtasks.notify import TaskNotifier
         from openjarvis.server.ws_bridge import connected_clients
@@ -258,6 +263,8 @@ def setup_devtasks(app: Any) -> None:
         )
         await notifier.start()
         app.state.devtask_notifier = notifier
+        scheduler.on_skip = notifier.routine_skipped  # e.g. daily budget reached
+        await scheduler.start()
         logger.info(
             "devtasks: %d project(s) registered%s",
             len(runner.registry.list()),

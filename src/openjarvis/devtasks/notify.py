@@ -373,6 +373,13 @@ class TaskNotifier:
             for t in active
         )
 
+    async def routine_skipped(self, name: str, project: str, reason: str) -> None:
+        where = f" ({project})" if project else ""
+        text = f"A rotina “{name}”{where} não rodou: {reason}"
+        if self.macos and self._clients() == 0:
+            await asyncio.to_thread(macos_notify, "Jarvis — rotina não rodou", text)
+        await self.telegram(f"⚠️ {_esc(text)}")
+
     # task events ----------------------------------------------------------
 
     def _on_event(self, event: Any) -> None:

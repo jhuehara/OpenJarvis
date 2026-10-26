@@ -37,6 +37,8 @@ class RoutineScheduler:
         self.poll_s = poll_s
         self.clock = clock
         self._task: Optional[asyncio.Task] = None
+        # async callback(routine_name, project, reason) when a run can't start
+        self.on_skip: Optional[Callable[..., Any]] = None
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
@@ -130,4 +132,7 @@ class RoutineScheduler:
                 logger.warning(
                     "routine %r (%s) not started: %s", routine.name, project, exc
                 )
+                if self.on_skip is not None:
+                    with contextlib.suppress(Exception):
+                        await self.on_skip(routine.name, project, str(exc))
         return created

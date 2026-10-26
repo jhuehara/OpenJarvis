@@ -46,6 +46,7 @@ _HUBS: Dict[str, str] = {
     "hub:tools": "Ferramentas",
     "hub:skills": "Habilidades",
     "hub:entities": "Conhecimento",
+    "hub:tasks": "Agentes",
 }
 
 _STOPWORDS = frozenset(
@@ -108,6 +109,7 @@ def build_knowledge_graph(
     tools: Iterable[str] = (),
     skills: Iterable[str] = (),
     limit: int = 400,
+    tasks_db: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Assemble ``{nodes, edges}`` from the local knowledge stores."""
     nodes: Dict[str, Dict[str, Any]] = {}
@@ -239,6 +241,32 @@ def build_knowledge_graph(
         )
         texts[nid] = f"{name} {etype}"
 
+    # ---- Work done by AI agents (dev tasks) ------------------------------
+    by_project: Dict[str, List[str]] = defaultdict(list)
+    for row in _read_rows(
+        tasks_db or (config_dir / "tasks.db"),
+        "SELECT id, kind, project, title, prompt, summary, status, created_at "
+        "FROM tasks ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ):
+        task_id, kind, project, title, prompt_text, summary, status, created = row
+        nid = f"task:{task_id}"
+        add_node(
+            nid,
+            _short(title or prompt_text or "tarefa", 70),
+            "task",
+            "hub:tasks",
+            detail=_short(f"{prompt_text}\n\n{summary or ''}", 400),
+            created_at=created,
+            status=status,
+            task_kind=kind,
+            project=project or "",
+            task_id=task_id,
+        )
+        texts[nid] = f"{project} {title} {prompt_text} {summary or ''}"
+        if project:
+            by_project[project].append(nid)
+
     # ---- Tools & skills ------------------------------------------------
     for tool in tools:
         nid = f"tool:{tool}"
@@ -283,6 +311,9 @@ def build_knowledge_graph(
     for group in by_source.values():
         for a, b in zip(group, group[1:]):
             add_edge(a, b, "same_source", 0.8)
+    for group in by_project.values():  # a project's tasks form a chain
+        for a, b in zip(group, group[1:]):
+            add_edge(a, b, "same_project", 0.7)
 
     # ---- Lexical similarity: each node links to its closest neighbours --
     kw = {nid: _keywords(t) for nid, t in texts.items()}
@@ -363,8 +394,11 @@ def knowledge_graph(request: Request, limit: int = 400):
         skills = sorted(SkillRegistry.keys())
     except Exception:
         skills = []
+    runner = getattr(request.app.state, "devtasks", None)
+    tasks_db = getattr(getattr(runner, "store", None), "_path", None)
     return build_knowledge_graph(
         config_dir=_config_dir(),
+        tasks_db=Path(tasks_db) if tasks_db else None,
         trace_db=Path(trace_db) if trace_db else None,
         tools=_enabled_tools(config),
         skills=skills,

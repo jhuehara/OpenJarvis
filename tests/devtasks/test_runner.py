@@ -196,6 +196,8 @@ def test_rejects_unknown_project_and_budget(env):
                 await runner.submit("codigo", "outro", "x")
             with pytest.raises(BudgetError):
                 await runner.submit("codigo", "demo", "x")
+            forced = await runner.submit("codigo", "demo", "x", force=True)
+            assert forced.status in ("queued", "running")
             with pytest.raises(KeyError):
                 await runner.approve("nope")
         finally:

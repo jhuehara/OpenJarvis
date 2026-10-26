@@ -253,6 +253,7 @@ class DevTaskRunner:
         prompt: str,
         title: str = "",
         routine: str = "",
+        force: bool = False,
     ) -> Task:
         kind = (kind or "codigo").strip().lower()
         if kind not in KINDS:
@@ -263,7 +264,8 @@ class DevTaskRunner:
         name = project
         if kind not in ("pesquisa", "resumo") or project:
             name = self.registry.resolve(project).name  # raises ProjectError
-        self._check_budget()
+        if not force:  # the user may confirm going over the daily cap
+            self._check_budget()
         task = self.store.create(
             kind=kind, project=name or "", prompt=prompt, title=title, routine=routine
         )
@@ -272,7 +274,7 @@ class DevTaskRunner:
         await self._enqueue(task.id)
         return task
 
-    async def followup(self, task_id: str, prompt: str) -> Task:
+    async def followup(self, task_id: str, prompt: str, force: bool = False) -> Task:
         task = self._require(task_id)
         if task.status in ("queued", "running"):
             raise ValueError("a tarefa ainda está em andamento")
@@ -282,7 +284,8 @@ class DevTaskRunner:
             task.worktree and Path(task.worktree).is_dir()
         ):
             raise ValueError("o worktree desta tarefa já foi removido")
-        self._check_budget()
+        if not force:
+            self._check_budget()
         if task.approval_id and self.approvals is not None:
             self.approvals.update_status(task.approval_id, "superseded")
         task = self._update(
