@@ -1250,6 +1250,17 @@ const MOODS = { alegria: 'joy', afeto: 'affection', curiosidade: 'curiosity', se
 const TAG_RE = /\[\[\s*([a-zà-ÿ]+)\s*:\s*([^\]]*?)\s*\]\]/gi;
 const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
 
+// Personalidade e perfil do usuário (SOUL.md / USER.md), montados pelo servidor
+let PERSONA = '';
+async function loadPersona() {
+  try { PERSONA = (await (await fetch('/v1/galaxy/persona', { headers: headers() })).json()).prompt || ''; }
+  catch { PERSONA = ''; }
+}
+function systemPrompt(...extra) {
+  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
+  return [PERSONA, `Agora é ${now} (horário de Brasília).`, GALAXY_PROMPT, ...extra].filter(Boolean).join('\n\n');
+}
+
 function parseReply(text) {
   let mood = null;
   const media = [];
@@ -1350,7 +1361,7 @@ async function send(text) {
   body.innerHTML = '<span class="caret"></span>';
 
   try {
-    const answer = await streamReply([{ role: 'system', content: GALAXY_PROMPT }, ...history], {
+    const answer = await streamReply([{ role: 'system', content: systemPrompt() }, ...history], {
       onDelta: (_, full) => {
         phase.textContent = '';
         body.innerHTML = renderMarkdown(parseReply(full).clean) + '<span class="caret"></span>';
@@ -2024,7 +2035,7 @@ const talk = {
     };
 
     try {
-      const answer = await streamReply([{ role: 'system', content: `${GALAXY_PROMPT}\n${VOICE_PROMPT}` }, ...history], {
+      const answer = await streamReply([{ role: 'system', content: systemPrompt(VOICE_PROMPT) }, ...history], {
         onDelta: delta => { if (turn !== this.turn) return; pending += delta; flush(false); },
         onEvent: (name, data) => handleAgentEvent(name, data, t => this.setPhase('busy', t, 'Toque no círculo para interromper')),
       });
@@ -2361,7 +2372,7 @@ window.jarvisGalaxy = { setState, emitWave, talk, mediaBox, parseReply, history 
 
 requestAnimationFrame(frame);
 setState('thinking');
-Promise.all([loadModel(), loadGraph()]).then(() => {
+Promise.all([loadModel(), loadGraph(), loadPersona()]).then(() => {
   setState('idle');
   emitWave(1.5);
 });

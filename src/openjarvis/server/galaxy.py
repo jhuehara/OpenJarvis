@@ -537,6 +537,36 @@ def media_resolve(url: str):
         raise HTTPException(status_code=502, detail="Could not load that link") from exc
 
 
+# ---- Persona -----------------------------------------------------------------
+
+
+@galaxy_router.get("/v1/galaxy/persona")
+def galaxy_persona(request: Request):
+    """The identity prompt (SOUL.md + MEMORY.md + USER.md) for the galaxy chat.
+
+    The server only adds this prompt when a request has no system message of
+    its own; the galaxy page always sends one (emotion/media/voice rules), so
+    it fetches the persona here and puts both in a single system message.
+    """
+    from openjarvis.prompt.builder import SystemPromptBuilder
+
+    cfg = getattr(request.app.state, "config", None)
+    if cfg is None:
+        from openjarvis.core.config import load_config
+
+        cfg = load_config()
+    try:
+        prompt = SystemPromptBuilder(
+            agent_template=cfg.agent.default_system_prompt or "",
+            memory_files_config=getattr(cfg, "memory_files", None),
+            system_prompt_config=getattr(cfg, "system_prompt", None),
+        ).build()
+    except Exception as exc:
+        logger.warning("galaxy persona prompt failed: %s", exc)
+        prompt = ""
+    return {"prompt": prompt}
+
+
 # ---- Neural voices (Kokoro) --------------------------------------------------
 
 # Brazilian Portuguese Kokoro voices; much more natural than the browser's

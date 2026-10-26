@@ -292,3 +292,23 @@ def test_speech_voices_route(monkeypatch):
     app.include_router(galaxy_router)
     client = TestClient(app)
     assert client.get("/v1/speech/voices").json() == {"available": False, "voices": []}
+
+
+def test_galaxy_persona_includes_user_profile(tmp_path, monkeypatch):
+    soul = tmp_path / "SOUL.md"
+    user = tmp_path / "USER.md"
+    soul.write_text("# Agent Persona\nVocê é o Jarvis.", encoding="utf-8")
+    user.write_text("# Perfil\nChame-o de Jonatan.", encoding="utf-8")
+
+    from openjarvis.core.config import load_config
+
+    cfg = load_config()
+    cfg.memory_files.soul_path = str(soul)
+    cfg.memory_files.user_path = str(user)
+    cfg.memory_files.memory_path = str(tmp_path / "MEMORY.md")
+    app = FastAPI()
+    app.state.config = cfg
+    app.include_router(galaxy_router)
+    prompt = TestClient(app).get("/v1/galaxy/persona").json()["prompt"]
+    assert "Você é o Jarvis." in prompt
+    assert "Chame-o de Jonatan." in prompt
