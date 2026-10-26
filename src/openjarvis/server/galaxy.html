@@ -114,6 +114,12 @@
 
   .toggle-chat { display: none; }
 
+  /* ---------- Seletor de projeto (perguntas sobre código) ---------- */
+  .ctx-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+  .ctx-bar select { background: rgba(0,0,0,.35); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; font: 500 13px var(--display); text-transform: none; letter-spacing: 0; }
+  .ctx-bar.on select { border-color: #39d0ff; color: #8ef2ff; box-shadow: 0 0 10px rgba(57, 208, 255, .25); }
+  .ctx-bar[hidden] { display: none; }
+
   /* ---------- Agentes: indicador discreto ---------- */
   .tasks-hud { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; pointer-events: auto; max-width: 340px; }
   .tasks-hud:empty { display: none; }
@@ -489,6 +495,9 @@
       <span id="talkHint">Diga “tchau, Jarvis” para encerrar</span>
     </div>
     <button type="button" class="talk-end" id="talkEnd">Encerrar</button>
+  </div>
+  <div class="ctx-bar" id="ctxBar" hidden title="Deixa o Jarvis ler o código do projeto (somente leitura) para responder">
+    Código <select id="projSel" aria-label="Projeto para perguntas sobre código"><option value="">nenhum</option></select>
   </div>
   <form class="composer" id="composer">
     <button type="button" class="icon-btn mic" id="micBtn" title="Falar (Whisper)" aria-label="Falar">
@@ -1392,11 +1401,38 @@ const TAG_RE = /\[\[\s*([a-zà-ÿ]+)\s*:\s*([^\]]*?)\s*\]\]/gi;
 const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
 
 // Personalidade e perfil do usuário (SOUL.md / USER.md), montados pelo servidor
-let PERSONA = '';
+let PERSONA = '', PERSONA_AT = 0;
 async function loadPersona() {
-  try { PERSONA = (await (await fetch('/v1/galaxy/persona', { headers: headers() })).json()).prompt || ''; }
+  try { PERSONA = (await (await fetch('/v1/galaxy/persona', { headers: headers() })).json()).prompt || ''; PERSONA_AT = Date.now(); }
   catch { PERSONA = ''; }
 }
+// Perfil, atividades recentes e estado dos projetos mudam: renova a cada minuto
+async function freshPersona() { if (Date.now() - PERSONA_AT > 60_000) await loadPersona(); }
+
+/* Projeto cujo código o Jarvis pode ler para responder (somente leitura) */
+const codeContext = {
+  projects: [],
+  async load() {
+    try { this.projects = (await (await fetch('/v1/projects', { headers: headers() })).json()).projects || []; } catch { this.projects = []; }
+    const sel = document.getElementById('projSel');
+    sel.innerHTML = '<option value="">nenhum</option>' + this.projects.map(p => `<option>${escapeHtml(p.name)}</option>`).join('');
+    sel.value = store.get('galaxy-project', '');
+    if (sel.value !== store.get('galaxy-project', '')) sel.value = '';
+    document.getElementById('ctxBar').hidden = !this.projects.length;
+    this.mark();
+    sel.onchange = () => { store.set('galaxy-project', sel.value); this.mark(); };
+  },
+  mark() { document.getElementById('ctxBar').classList.toggle('on', !!document.getElementById('projSel').value); },
+  // Projeto escolhido no seletor, ou citado numa pergunta técnica ("no OpenJarvis, onde fica…")
+  forText(text) {
+    const chosen = document.getElementById('projSel').value;
+    if (chosen) return chosen;
+    const t = text.toLowerCase();
+    const named = this.projects.filter(p => new RegExp(`\\b${p.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t));
+    const technical = /\b(c[oó]digo|arquivo|fun[cç][aã]o|classe|m[eé]todo|rota|endpoint|teste|bug|erro|implementa|como funciona|onde (fica|est[aá])|qual (arquivo|parte)|explica)/.test(t);
+    return named.length === 1 && technical ? named[0].name : '';
+  },
+};
 function systemPrompt(...extra) {
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
   return [PERSONA, `Agora é ${now} (horário de Brasília).`, agents.contextText(), GALAXY_PROMPT, ...extra].filter(Boolean).join('\n\n');
@@ -1440,11 +1476,11 @@ function setMood(mood) {
 }
 
 /* Envia `messages` e processa o streaming SSE; devolve o texto completo. */
-async function streamReply(messages, { onDelta, onEvent }) {
+async function streamReply(messages, { onDelta, onEvent, project = '' }) {
   const res = await fetch('/v1/chat/completions', {
     method: 'POST',
     headers: headers({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ model: MODEL, messages, stream: true, max_tokens: 2048 }),
+    body: JSON.stringify({ model: MODEL, messages, stream: true, max_tokens: 2048, ...(project ? { project } : {}) }),
   });
   if (!res.ok) throw new Error(`O servidor respondeu ${res.status}`);
   const reader = res.body.getReader(), dec = new TextDecoder();
@@ -1533,7 +1569,11 @@ async function send(text) {
   body.innerHTML = '<span class="caret"></span>';
 
   try {
+    await freshPersona();
+    const project = codeContext.forText(text);
+    if (project) phase.textContent = `lendo o código de ${project}…`;
     const answer = await streamReply([{ role: 'system', content: systemPrompt() }, ...history], {
+      project,
       onDelta: (_, full) => {
         phase.textContent = '';
         body.innerHTML = renderMarkdown(parseReply(full).clean) + '<span class="caret"></span>';
@@ -1558,11 +1598,11 @@ async function send(text) {
 
 function handleAgentEvent(name, data, showPhase = () => {}) {
   if (name === 'tool_call_start') {
-    setState('tool');
-    showPhase(`⟢ ${data.tool || 'ferramenta'}…`);
-    illuminate(String(data.tool || '').replace(/_/g, ' '), 2);
+    setState('tool');                     // ciano: o Jarvis está usando uma ferramenta
+    showPhase(`⟢ ${data.step || data.tool || 'ferramenta'}…`);
+    illuminate(`${String(data.tool || '').replace(/_/g, ' ')} ${data.detail || ''}`, 2);
   } else if (name === 'tool_call_end') {
-    setState(data.success === false ? 'concern' : 'thinking');
+    setState('thinking');                 // uma ferramenta que falha é rotina, não preocupação
     showPhase('integrando resultado…');
   } else if (name === 'inference_start') {
     if (view.state !== 'speaking') setState('thinking');
@@ -2220,7 +2260,9 @@ const talk = {
     };
 
     try {
+      await freshPersona();
       const answer = await streamReply([{ role: 'system', content: systemPrompt(VOICE_PROMPT) }, ...history], {
+        project: codeContext.forText(text),
         onDelta: delta => { if (turn !== this.turn) return; pending += delta; flush(false); },
         onEvent: (name, data) => handleAgentEvent(name, data, t => this.setPhase('busy', t, 'Toque no círculo para interromper')),
       });
@@ -3031,6 +3073,7 @@ requestAnimationFrame(frame);
 setState('thinking');
 satellites.init();
 agents.init();
+codeContext.load();
 Promise.all([loadModel(), loadGraph(), loadPersona()]).then(() => {
   setState('idle');
   emitWave(1.5);

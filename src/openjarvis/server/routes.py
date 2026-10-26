@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import threading
 import uuid
 import weakref
 from dataclasses import replace
-from typing import Any
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -164,6 +165,7 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
     use_server_agent = (
         agent is not None
         and not request_body.tools
+        and not request_body.project  # code reading needs the engine itself
         and (not request_body.stream or bool(getattr(agent, "_tools", None)))
     )
 
@@ -316,6 +318,7 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
             app_config=config,
             bus=getattr(request.app.state, "bus", None),
             memory_service=getattr(request.app.state, "memory_service", None),
+            project_path=_project_path(request, request_body.project),
         )
 
     # Non-streaming: use agent if available, otherwise direct engine call.
@@ -909,6 +912,53 @@ async def _handle_stream_tools(
     )
 
 
+# Read-only Claude Code tools for questions about a registered project's code.
+PROJECT_READ_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch"
+
+
+def _project_path(request: Request, name: str | None) -> str | None:
+    """Absolute checkout of a registered dev project (400 if unknown)."""
+    if not name:
+        return None
+    runner = getattr(request.app.state, "devtasks", None)
+    if runner is None:
+        raise HTTPException(status_code=400, detail="Nenhum projeto cadastrado")
+    from openjarvis.devtasks.projects import ProjectError
+
+    try:
+        return str(runner.registry.resolve(name).path)
+    except ProjectError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+async def _with_tool_events(token_iter, queue: asyncio.Queue):
+    """Yield ``("token", str)`` / ``("tool", dict)`` in arrival order.
+
+    Tool events come from the engine's ``on_tool_event`` callback (outside
+    the token stream), so tokens are pumped through the same queue.
+    """
+
+    async def pump():
+        try:
+            async for token in token_iter:
+                await queue.put(("token", token))
+            await queue.put(("end", None))
+        except BaseException as exc:  # noqa: BLE001 — re-raised by the consumer
+            await queue.put(("error", exc))
+
+    task = asyncio.create_task(pump())
+    try:
+        while True:
+            kind, item = await queue.get()
+            if kind == "end":
+                return
+            if kind == "error":
+                raise item
+            yield kind, item
+    finally:
+        task.cancel()
+
+
 async def _handle_stream(
     engine,
     model: str,
@@ -919,6 +969,7 @@ async def _handle_stream(
     app_config=None,
     bus=None,
     memory_service=None,
+    project_path: str | None = None,
 ):
     """Stream response using SSE format.
 
@@ -1001,13 +1052,38 @@ async def _handle_stream(
                         model, messages, req.temperature, req.max_tokens
                     )
                 else:
+                    extra: Dict[str, Any] = {}
+                    if actual_telemetry_engine == "claude_code":
+                        # Report Claude Code's own tool use as named SSE events.
+                        tool_queue = asyncio.Queue()
+                        extra["on_tool_event"] = lambda ev: tool_queue.put_nowait(
+                            ("tool", ev)
+                        )
+                        if project_path:
+                            extra["workspace"] = project_path
+                            extra["tools"] = PROJECT_READ_TOOLS
                     token_iter = engine.stream(
                         messages,
                         model=model,
                         temperature=req.temperature,
                         max_tokens=req.max_tokens,
+                        **extra,
                     )
+                    if extra:
+                        token_iter = _with_tool_events(token_iter, tool_queue)
             async for token in token_iter:
+                if isinstance(token, tuple):
+                    kind, item = token
+                    if kind == "tool":
+                        name = (
+                            "tool_call_start"
+                            if item.get("type") == "start"
+                            else "tool_call_end"
+                        )
+                        payload = {k: v for k, v in item.items() if k != "type"}
+                        yield f"event: {name}\ndata: {json.dumps(payload)}\n\n"
+                        continue
+                    token = item
                 full_content += token
                 chunk = ChatCompletionChunk(
                     id=chunk_id,

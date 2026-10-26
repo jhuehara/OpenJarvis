@@ -28,6 +28,9 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = 1024
     stream: bool = False
     tools: Optional[List[Dict[str, Any]]] = None
+    # Registered dev project whose code the claude_code engine may read
+    # (read-only tools) to answer this request; see devtasks.ProjectRegistry.
+    project: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

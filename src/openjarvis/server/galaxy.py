@@ -641,7 +641,17 @@ def galaxy_persona(request: Request):
         )
     runner = getattr(request.app.state, "devtasks", None)
     if runner is not None:
-        prompt += "\n\n" + delegation_rules(runner.registry.list())
+        from openjarvis.devtasks.context import projects_context
+
+        projects = runner.registry.list()
+        prompt += "\n\n" + delegation_rules(projects)
+        status = projects_context(projects)
+        if status:
+            prompt += (
+                "\n\n" + status + "\nQuando uma pergunta exigir ler o código de um "
+                "projeto, a interface pode te dar acesso de leitura a ele (ferramentas "
+                "Read, Grep e Glob); use-as antes de responder sobre o código."
+            )
     return {"prompt": prompt}
 
 

@@ -72,6 +72,20 @@ def _usage(
     }
 
 
+def _emit_tool_events(event: Dict[str, Any], callback: Any, cwd: str) -> None:
+    """Report Claude Code tool use/results from a stream-json message."""
+    try:
+        from openjarvis.devtasks.steps import parse_line
+
+        for kind, payload in parse_line(json.dumps(event), cwd):
+            if kind == "tool_start":
+                callback({"type": "start", **payload})
+            elif kind == "tool_end":
+                callback({"type": "end", "id": payload["id"], "ok": payload["ok"]})
+    except Exception:  # noqa: BLE001 — progress events must never break a reply
+        logger.debug("tool event callback failed", exc_info=True)
+
+
 class _CliAgentEngine(InferenceEngine):
     """Shared plumbing: locate the binary, run it, map model ids."""
 
@@ -161,10 +175,18 @@ class ClaudeCodeEngine(_CliAgentEngine):
         # Built-in Claude Code tools to enable ("" = plain chat, no tools).
         self._tools = tools
 
-    def _argv(self, binary: str, model: str, system: str, stream: bool) -> List[str]:
-        argv = [binary, "-p", "--no-session-persistence", "--tools", self._tools]
-        if self._tools:
-            argv += ["--allowedTools", self._tools]
+    def _argv(
+        self,
+        binary: str,
+        model: str,
+        system: str,
+        stream: bool,
+        tools: Optional[str] = None,
+    ) -> List[str]:
+        tools = self._tools if tools is None else tools
+        argv = [binary, "-p", "--no-session-persistence", "--tools", tools]
+        if tools:
+            argv += ["--allowedTools", tools]
         if stream:
             argv += [
                 "--output-format",
@@ -233,10 +255,22 @@ class ClaudeCodeEngine(_CliAgentEngine):
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
+        """Stream text deltas.
+
+        Optional keyword arguments (ignored by other engines' callers):
+        ``on_tool_event(dict)`` is called when Claude Code starts/finishes a
+        built-in tool (kept out of the token stream so wrappers that join
+        tokens keep working); ``workspace`` runs the CLI in another directory
+        and ``tools`` overrides the enabled tools for this call (e.g. read-only
+        ``"Read,Grep,Glob"`` to answer questions about a project's code).
+        """
+        on_tool_event = kwargs.get("on_tool_event")
         binary, cwd = self._prepare_run()
+        if kwargs.get("workspace"):
+            cwd = str(kwargs["workspace"])
         system, prompt = _render_prompt(messages)
         proc = await asyncio.create_subprocess_exec(
-            *self._argv(binary, model, system, stream=True),
+            *self._argv(binary, model, system, stream=True, tools=kwargs.get("tools")),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -263,6 +297,11 @@ class ClaudeCodeEngine(_CliAgentEngine):
                     event = json.loads(raw)
                 except json.JSONDecodeError:
                     continue
+                if on_tool_event is not None and event.get("type") in (
+                    "assistant",
+                    "user",
+                ):
+                    _emit_tool_events(event, on_tool_event, cwd)
                 if event.get("type") == "stream_event":
                     delta = (event.get("event") or {}).get("delta") or {}
                     if delta.get("type") == "text_delta" and delta.get("text"):
