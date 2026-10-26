@@ -1491,40 +1491,114 @@ const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* opcional */ } },
 };
-let ptVoice = null;
 let voiceRate = Number(store.get('galaxy-voice-rate', '1.05')) || 1.05;
-// Vozes neurais/aprimoradas soam bem melhor que as "Eloquence" (Eddy, Flo, Reed…)
+const DEFAULT_VOICE = 'kokoro:pm_alex';   // masculina, neural (bem menos robótica)
+// Vozes do navegador que soam bem melhor que as "Eloquence" (Eddy, Flo, Reed…)
 const isBetterVoice = v => /Luciana|Francisca|Thalita|Antonio|Google|Natural|Premium|Enhanced|Aprimorad|Neural/i.test(v.name);
+const GENDER_PT = { male: 'masculina', female: 'feminina' };
+
+/* Cada voz é { key, name, sub, lang, neural, natural, id? (Kokoro), web? (SpeechSynthesisVoice) } */
+let neuralVoices = [];
+let currentVoice = null;
+
+function webVoiceEntries() {
+  if (!('speechSynthesis' in window)) return [];
+  return speechSynthesis.getVoices().map(v => ({
+    key: `web:${v.voiceURI}`, web: v, lang: v.lang, neural: false, natural: isBetterVoice(v),
+    name: v.name.replace(/\s*\((português|portuguese).*\)\s*$/i, ''),
+    sub: `${langLabel(v.lang)} · navegador · ${v.localService ? 'local' : 'online'}`,
+  }));
+}
+function neuralEntries() {
+  return neuralVoices.map(v => ({
+    key: `kokoro:${v.id}`, id: v.id, lang: v.lang, neural: true, natural: true,
+    name: `${v.name}`, sub: `${GENDER_PT[v.gender] || ''} · neural · local`,
+  }));
+}
+
 function pickVoice() {
-  const voices = speechSynthesis.getVoices();
-  const saved = store.get('galaxy-voice', '');
-  ptVoice = voices.find(v => v.voiceURI === saved || v.name === saved) ||
-            voices.find(v => v.lang === 'pt-BR' && isBetterVoice(v)) ||
-            voices.find(v => v.lang === 'pt-BR') || voices.find(v => v.lang?.startsWith('pt')) || null;
+  const saved = store.get('galaxy-voice2', DEFAULT_VOICE);
+  const all = [...neuralEntries(), ...webVoiceEntries()];
+  const web = all.filter(v => !v.neural);
+  currentVoice = all.find(v => v.key === saved) ||
+                 all.find(v => v.key === DEFAULT_VOICE) ||
+                 web.find(v => v.lang === 'pt-BR' && v.natural) ||
+                 web.find(v => v.lang === 'pt-BR') || web.find(v => v.lang?.startsWith('pt')) || null;
   renderVoices();
 }
-if ('speechSynthesis' in window) { speechSynthesis.addEventListener?.('voiceschanged', pickVoice); }
+
+async function loadNeuralVoices() {
+  try {
+    const r = await fetch('/v1/speech/voices', { headers: headers() });
+    const d = await r.json();
+    neuralVoices = d.available ? d.voices : [];
+  } catch { neuralVoices = []; }
+  pickVoice();
+}
+
+/* Motor neural: o servidor gera o áudio (Kokoro) e a página toca */
+const neuralTTS = {
+  ctx: null,
+  async synth(text, voiceId, signal) {
+    const r = await fetch('/v1/speech/synthesize', {
+      method: 'POST', signal,
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ text: text.slice(0, 800), voice_id: voiceId, speed: Math.min(2, Math.max(0.5, voiceRate)) }),
+    });
+    if (!r.ok) throw new Error(`voz neural: erro ${r.status}`);
+    return URL.createObjectURL(await r.blob());
+  },
+  // Toca uma URL de áudio; devolve { cancel() }. A esfera pulsa com o volume real.
+  play(url, { onstart, onend }) {
+    const audio = new Audio(url);
+    let meterOn = false, done = false;
+    const end = () => { if (done) return; done = true; meterOn = false; URL.revokeObjectURL(url); onend?.(); };
+    try {
+      this.ctx ||= new AudioContext();
+      this.ctx.resume?.();
+      const src = this.ctx.createMediaElementSource(audio), an = this.ctx.createAnalyser();
+      an.fftSize = 512; src.connect(an); an.connect(this.ctx.destination);
+      const buf = new Uint8Array(an.fftSize);
+      const meter = () => {
+        if (!meterOn) return;
+        an.getByteTimeDomainData(buf);
+        let sum = 0; for (const v of buf) sum += ((v - 128) / 128) ** 2;
+        view.burst = Math.max(view.burst, Math.min(1.5, Math.sqrt(sum / buf.length) * 7));
+        requestAnimationFrame(meter);
+      };
+      audio.addEventListener('play', () => { meterOn = true; meter(); });
+    } catch { /* sem Web Audio: toca sem medidor */ }
+    audio.onplaying = () => onstart?.();
+    audio.onended = audio.onerror = end;
+    audio.play().catch(end);
+    return { cancel() { audio.pause(); end(); } };
+  },
+};
 
 const speaker = {
-  queue: [], active: false, waiters: [], gen: 0,
+  queue: [], active: false, waiters: [], gen: 0, ctl: null,
   say(text, onStart) {
     const clean = spokenText(text);
     if (!clean) return;
-    if (!ttsOn || !('speechSynthesis' in window)) { onStart?.(); return; }   // som desligado: só texto
-    this.queue.push({ clean, onStart });
+    const v = currentVoice;
+    if (!ttsOn || !v || (!v.neural && !('speechSynthesis' in window))) { onStart?.(); return; }   // som desligado: só texto
+    const item = { clean, onStart, voice: v };
+    if (v.neural) {   // já pede o áudio ao servidor: as próximas frases ficam prontas enquanto a atual toca
+      item.abort = new AbortController();
+      item.ready = neuralTTS.synth(clean, v.id, item.abort.signal);
+      item.ready.catch(() => {});
+    }
+    this.queue.push(item);
     if (!this.active) this.next();
   },
   next() {
     const item = this.queue.shift();
     if (!item) {
-      this.active = false; this.waiters.splice(0).forEach(r => r());
+      this.active = false; this.ctl = null; this.waiters.splice(0).forEach(r => r());
       if (view.state === 'speaking') setState(view.mood, 10000);   // terminou de falar
       return;
     }
     this.active = true;
-    const u = new SpeechSynthesisUtterance(item.clean);
-    u.lang = ptVoice?.lang || 'pt-BR'; u.rate = voiceRate;
-    if (ptVoice) u.voice = ptVoice;
     let started = false, finished = false;
     const gen = this.gen;
     const finish = () => {
@@ -1533,17 +1607,33 @@ const speaker = {
       if (!started) item.onStart?.();
       this.next();
     };
-    // Sem voz disponível (ou motor travado): mostra o texto e segue a fila
-    const guard = setTimeout(() => { if (!started) { speechSynthesis.cancel(); finish(); } }, 3000);
-    u.onstart = () => { started = true; clearTimeout(guard); item.onStart?.(); if (view.state !== 'speaking') setState('speaking'); };
+    const begin = () => { started = true; clearTimeout(guard); item.onStart?.(); if (view.state !== 'speaking') setState('speaking'); };
+    // Motor travado ou sem voz: mostra o texto e segue a fila
+    const guard = setTimeout(() => { if (!started) { this.ctl?.cancel(); finish(); } }, item.voice.neural ? 30000 : 3000);
+
+    if (item.voice.neural) {
+      item.ready
+        .then(url => {
+          if (gen !== this.gen) { URL.revokeObjectURL(url); return; }
+          this.ctl = neuralTTS.play(url, { onstart: begin, onend: finish });
+        })
+        .catch(finish);
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(item.clean);
+    u.lang = item.voice.lang || 'pt-BR'; u.rate = voiceRate; u.voice = item.voice.web;
+    u.onstart = begin;
     u.onboundary = () => { view.burst = Math.min(1.5, view.burst + 0.5); };
     u.onend = u.onerror = finish;
+    this.ctl = { cancel: () => speechSynthesis.cancel() };
     speechSynthesis.speak(u);
   },
   // flush: mostra o texto das frases que não chegaram a ser ditas
   stop({ flush = false } = {}) {
     this.gen++;
     const left = this.queue.splice(0);
+    left.forEach(item => item.abort?.abort());
+    this.ctl?.cancel(); this.ctl = null;
     window.speechSynthesis?.cancel();
     this.active = false;
     if (flush) left.forEach(item => item.onStart?.());
@@ -1584,27 +1674,25 @@ function langLabel(lang) {
 }
 
 function renderVoices() {
-  if (!('speechSynthesis' in window)) { vpList.innerHTML = '<div class="vp-empty">Este navegador não tem síntese de voz.</div>'; return; }
-  const all = speechSynthesis.getVoices();
-  let voices = vpAll.checked ? all : all.filter(v => v.lang?.toLowerCase().startsWith('pt'));
-  if (!voices.length && !vpAll.checked) voices = all;
-  voices = [...voices].sort((a, b) =>
-    (b.lang === 'pt-BR') - (a.lang === 'pt-BR') || isBetterVoice(b) - isBetterVoice(a) || a.name.localeCompare(b.name));
+  const web = webVoiceEntries();
+  let shownWeb = vpAll.checked ? web : web.filter(v => v.lang?.toLowerCase().startsWith('pt'));
+  shownWeb = [...shownWeb].sort((a, b) =>
+    (b.lang === 'pt-BR') - (a.lang === 'pt-BR') || b.natural - a.natural || a.name.localeCompare(b.name));
+  const voices = [...neuralEntries(), ...shownWeb];
   document.getElementById('vpCount').textContent = `${voices.length} voz${voices.length === 1 ? '' : 'es'}`;
   vpList.innerHTML = '';
   if (!voices.length) { vpList.innerHTML = '<div class="vp-empty">Nenhuma voz encontrada.</div>'; return; }
   for (const v of voices) {
     const item = document.createElement('div');
-    const selected = ptVoice && v.voiceURI === ptVoice.voiceURI;
+    const selected = currentVoice && v.key === currentVoice.key;
     item.className = 'vp-item';
     item.setAttribute('role', 'radio');
     item.setAttribute('aria-checked', String(!!selected));
     item.tabIndex = selected ? 0 : -1;
-    const name = v.name.replace(/\s*\((português|portuguese).*\)\s*$/i, '');
     item.innerHTML = `<span class="vp-dot"></span>
-      <span class="vp-name">${escapeHtml(name)}<small>${escapeHtml(langLabel(v.lang))} · ${v.localService ? 'local' : 'online'}</small></span>
-      ${isBetterVoice(v) ? '<span class="vp-tag best">NATURAL</span>' : ''}
-      <button type="button" class="icon-btn vp-play" aria-label="Ouvir ${escapeHtml(name)}" title="Ouvir amostra">
+      <span class="vp-name">${escapeHtml(v.name)}<small>${escapeHtml(v.sub)}</small></span>
+      ${v.neural ? '<span class="vp-tag best">NEURAL</span>' : v.natural ? '<span class="vp-tag best">NATURAL</span>' : ''}
+      <button type="button" class="icon-btn vp-play" aria-label="Ouvir ${escapeHtml(v.name)}" title="Ouvir amostra">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
       </button>`;
     item.addEventListener('click', ev => {
@@ -1624,25 +1712,43 @@ function renderVoices() {
 }
 
 function chooseVoice(v) {
-  ptVoice = v;
-  store.set('galaxy-voice', v.voiceURI);
+  currentVoice = v;
+  store.set('galaxy-voice2', v.key);
   renderVoices();
   vpList.querySelector('[aria-checked="true"]')?.focus();
   preview(v, vpList.querySelector('[aria-checked="true"] .vp-play'));
 }
 
-function preview(v, btn) {
-  if (speaker.active) speaker.stop();
-  speechSynthesis.cancel();
+let previewCtl = null;
+function stopPreview() {
+  previewCtl?.cancel(); previewCtl = null;
   vpList.querySelectorAll('.vp-play.playing').forEach(b => b.classList.remove('playing'));
-  if (previewing === v.voiceURI) { previewing = null; return; }   // segundo clique para
-  const u = new SpeechSynthesisUtterance(v.lang?.startsWith('pt') ? SAMPLE : 'Hello, I am Jarvis. This is how my voice sounds.');
-  u.voice = v; u.lang = v.lang; u.rate = voiceRate;
-  previewing = v.voiceURI;
+}
+async function preview(v, btn) {
+  if (speaker.active) speaker.stop();
+  const again = previewing === v.key;
+  stopPreview(); previewing = null;
+  if (again) return;   // segundo clique para
+  previewing = v.key;
   btn?.classList.add('playing');
+  const done = () => { btn?.classList.remove('playing'); if (previewing === v.key) { previewing = null; setState('idle'); } };
+  const text = v.lang?.startsWith('pt') ? SAMPLE : 'Hello, I am Jarvis. This is how my voice sounds.';
+  if (v.neural) {
+    const abort = new AbortController();
+    previewCtl = { cancel: () => abort.abort() };
+    try {
+      const url = await neuralTTS.synth(text, v.id, abort.signal);
+      if (previewing !== v.key) { URL.revokeObjectURL(url); return; }
+      previewCtl = neuralTTS.play(url, { onstart: () => setState('speaking'), onend: done });
+    } catch { done(); }
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = v.web; u.lang = v.lang; u.rate = voiceRate;
   u.onstart = () => setState('speaking');
   u.onboundary = () => { view.burst = Math.min(1.5, view.burst + 0.5); };
-  u.onend = u.onerror = () => { btn?.classList.remove('playing'); if (previewing === v.voiceURI) previewing = null; setState('idle'); };
+  u.onend = u.onerror = done;
+  previewCtl = { cancel: () => speechSynthesis.cancel() };
   speechSynthesis.speak(u);
 }
 
@@ -1660,8 +1766,9 @@ vpAll.onchange = renderVoices;
 vpRate.value = voiceRate;
 vpRateOut.textContent = `${voiceRate.toFixed(2)}×`;
 vpRate.oninput = () => { voiceRate = Number(vpRate.value); vpRateOut.textContent = `${voiceRate.toFixed(2)}×`; store.set('galaxy-voice-rate', String(voiceRate)); };
-vpRate.onchange = () => ptVoice && preview(ptVoice, null);
-if ('speechSynthesis' in window) pickVoice();
+vpRate.onchange = () => currentVoice && preview(currentVoice, null);
+if ('speechSynthesis' in window) speechSynthesis.addEventListener?.('voiceschanged', pickVoice);
+loadNeuralVoices();
 
 /* =====================================================================
    Modo conversa — mãos livres; o chat mostra só o que foi falado

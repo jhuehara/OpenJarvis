@@ -15,13 +15,15 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 import urllib.parse
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from pydantic import BaseModel, Field
 
 from openjarvis.security.ssrf import check_ssrf
 
@@ -535,7 +537,85 @@ def media_resolve(url: str):
         raise HTTPException(status_code=502, detail="Could not load that link") from exc
 
 
+# ---- Neural voices (Kokoro) --------------------------------------------------
+
+# Brazilian Portuguese Kokoro voices; much more natural than the browser's
+# Eloquence voices. Ordered as shown in the voice picker.
+NEURAL_VOICES = [
+    {"id": "pm_alex", "name": "Alex", "gender": "male", "lang": "pt-BR"},
+    {"id": "pm_santa", "name": "Santa", "gender": "male", "lang": "pt-BR"},
+    {"id": "pf_dora", "name": "Dora", "gender": "female", "lang": "pt-BR"},
+]
+_NEURAL_IDS = {v["id"] for v in NEURAL_VOICES}
+_tts_backend: Any = None
+_tts_lock = threading.Lock()
+
+
+def _kokoro() -> Any:
+    """Lazily build (and cache) the Kokoro backend; the model loads on first use."""
+    global _tts_backend
+    with _tts_lock:
+        if _tts_backend is None:
+            from openjarvis.speech.kokoro_tts import KokoroTTSBackend
+
+            _tts_backend = KokoroTTSBackend()
+        return _tts_backend
+
+
+def _neural_available() -> bool:
+    try:
+        import kokoro  # noqa: F401
+        import soundfile  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def _warm_up() -> None:
+    try:
+        _kokoro().synthesize("Olá.", voice_id=NEURAL_VOICES[0]["id"])
+    except Exception as exc:  # warm-up is best effort
+        logger.debug("kokoro warm-up failed: %s", exc)
+
+
+class SynthesizeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=800)
+    voice_id: str = NEURAL_VOICES[0]["id"]
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+
+
+@galaxy_router.get("/v1/speech/voices")
+def speech_voices():
+    """Neural voices the galaxy page can use; also warms the model up."""
+    available = _neural_available()
+    if available and _tts_backend is None:
+        threading.Thread(target=_warm_up, daemon=True).start()
+    return {"available": available, "voices": NEURAL_VOICES if available else []}
+
+
+@galaxy_router.post("/v1/speech/synthesize")
+def speech_synthesize(req: SynthesizeRequest):
+    """Text -> WAV with a local Kokoro voice (one sentence at a time)."""
+    if req.voice_id not in _NEURAL_IDS:
+        raise HTTPException(status_code=400, detail="Unknown voice")
+    if not _neural_available():
+        raise HTTPException(status_code=501, detail="Kokoro is not installed")
+    try:
+        result = _kokoro().synthesize(
+            req.text, voice_id=req.voice_id, speed=req.speed, output_format="wav"
+        )
+    except Exception as exc:
+        logger.warning("kokoro synthesis failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Speech synthesis failed") from exc
+    return Response(
+        content=result.audio,
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 __all__ = [
+    "NEURAL_VOICES",
     "build_knowledge_graph",
     "classify_media_url",
     "galaxy_router",

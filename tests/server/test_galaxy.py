@@ -249,3 +249,46 @@ def test_classify_music_urls():
     assert classify_media_url("https://cdn.example.com/som.mp3")["type"] == "audio"
     assert classify_media_url("https://soundcloud.com/artista") is None
     assert "https://w.soundcloud.com" in GALAXY_CSP
+
+
+def test_speech_synthesize_route(monkeypatch):
+    from openjarvis.server import galaxy
+    from openjarvis.speech.tts import TTSResult
+
+    calls = []
+
+    class FakeKokoro:
+        def synthesize(self, text, *, voice_id, speed, output_format):
+            calls.append((text, voice_id, speed, output_format))
+            return TTSResult(audio=b"RIFFfake", format="wav", voice_id=voice_id)
+
+    monkeypatch.setattr(galaxy, "_kokoro", lambda: FakeKokoro())
+    monkeypatch.setattr(galaxy, "_neural_available", lambda: True)
+    app = FastAPI()
+    app.include_router(galaxy_router)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/v1/speech/synthesize", json={"text": "Olá", "voice_id": "pm_alex"}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "audio/wav"
+    assert resp.content == b"RIFFfake"
+    assert calls == [("Olá", "pm_alex", 1.0, "wav")]
+
+    bad = client.post("/v1/speech/synthesize", json={"text": "x", "voice_id": "../x"})
+    assert bad.status_code == 400
+    too_long = client.post(
+        "/v1/speech/synthesize", json={"text": "a" * 801, "voice_id": "pm_alex"}
+    )
+    assert too_long.status_code == 422
+
+
+def test_speech_voices_route(monkeypatch):
+    from openjarvis.server import galaxy
+
+    monkeypatch.setattr(galaxy, "_neural_available", lambda: False)
+    app = FastAPI()
+    app.include_router(galaxy_router)
+    client = TestClient(app)
+    assert client.get("/v1/speech/voices").json() == {"available": False, "voices": []}
