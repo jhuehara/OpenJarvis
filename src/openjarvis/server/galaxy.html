@@ -1171,11 +1171,15 @@ const headers = (extra = {}) => (API_KEY ? { ...extra, Authorization: `Bearer ${
 let MODEL = 'default';
 
 async function loadModel() {
+  // O modelo padrão do servidor (config.toml); a lista de /v1/models não é ordenada por preferência
   try {
-    const r = await fetch('/v1/models', { headers: headers() });
-    const d = await r.json();
+    const info = await (await fetch('/v1/info', { headers: headers() })).json();
+    if (info.model) { MODEL = info.model; return; }
+  } catch { /* tenta a lista */ }
+  try {
+    const d = await (await fetch('/v1/models', { headers: headers() })).json();
     MODEL = d.data?.[0]?.id || MODEL;
-  } catch { /* usa o modelo padrão do servidor */ }
+  } catch { /* usa o padrão do servidor */ }
 }
 
 let lastGraph = null;
