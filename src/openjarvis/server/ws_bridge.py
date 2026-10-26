@@ -15,6 +15,16 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
+# Live UI connections (e.g. the galaxy page): server-side desktop notifications
+# are only needed when nobody is watching.
+_ACTIVE_CLIENTS = 0
+
+
+def connected_clients() -> int:
+    """Number of open ``/v1/agents/events`` WebSocket connections."""
+    return _ACTIVE_CLIENTS
+
+
 # Agent-related event types to forward
 _AGENT_EVENTS = {
     EventType.AGENT_TICK_START,
@@ -82,6 +92,8 @@ def create_ws_router(event_bus: EventBus) -> Any:
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         loop = asyncio.get_running_loop()
         clients[websocket] = (queue, loop)
+        global _ACTIVE_CLIENTS
+        _ACTIVE_CLIENTS += 1
         recv: asyncio.Task | None = None
         payload: asyncio.Task | None = None
         disconnected = False
@@ -107,7 +119,8 @@ def create_ws_router(event_bus: EventBus) -> Any:
         except WebSocketDisconnect:
             disconnected = True
         finally:
-            clients.pop(websocket, None)
+            if clients.pop(websocket, None) is not None:
+                _ACTIVE_CLIENTS -= 1
             pending = [task for task in (recv, payload) if task is not None]
             for task in pending:
                 task.cancel()

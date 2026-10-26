@@ -1309,6 +1309,7 @@ class DevTasksConfig:
     projects: List[DevTaskProject] = field(default_factory=list)
     timezone: str = "America/Sao_Paulo"
     routines: List[DevTaskRoutine] = field(default_factory=list)
+    notify_macos: bool = True  # desktop notices when no galaxy page is open
 
 
 @dataclass(slots=True)

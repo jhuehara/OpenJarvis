@@ -30,6 +30,10 @@ class CreateTaskRequest(BaseModel):
     title: str = Field(default="", max_length=200)
 
 
+class TelegramSetupRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
 class FollowupRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=8000)
 
@@ -159,6 +163,43 @@ async def run_routine(name: str, request: Request):
     return {"tasks": [t.to_dict() for t in tasks]}
 
 
+def _notifier(request: Request) -> Any:
+    notifier = getattr(request.app.state, "devtask_notifier", None)
+    if notifier is None:
+        raise HTTPException(status_code=503, detail="Notificações desativadas")
+    return notifier
+
+
+@router.get("/v1/notify/status")
+def notify_status(request: Request):
+    return _notifier(request).status()
+
+
+@router.post("/v1/notify/telegram")
+async def notify_telegram_setup(req: TelegramSetupRequest, request: Request):
+    try:
+        return await _notifier(request).configure(req.token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:  # Telegram rejected the token
+        raise HTTPException(status_code=400, detail=f"Telegram: {exc}") from exc
+
+
+@router.post("/v1/notify/telegram/test")
+async def notify_telegram_test(request: Request):
+    notifier = _notifier(request)
+    if not notifier.status()["telegram"]["paired"]:
+        raise HTTPException(status_code=409, detail="Telegram ainda não pareado")
+    await notifier.send_test()
+    return {"sent": True}
+
+
+@router.delete("/v1/notify/telegram")
+def notify_telegram_remove(request: Request):
+    _notifier(request).unpair()
+    return _notifier(request).status()
+
+
 @router.post("/v1/tasks/killswitch")
 async def killswitch(request: Request):
     stopped = await _runner(request).killswitch()
@@ -206,6 +247,17 @@ def setup_devtasks(app: Any) -> None:
         scheduler = RoutineScheduler(runner, cfg.routines, cfg.timezone)
         await scheduler.start()
         app.state.devtask_routines = scheduler
+        from openjarvis.devtasks.notify import TaskNotifier
+        from openjarvis.server.ws_bridge import connected_clients
+
+        notifier = TaskNotifier(
+            runner,
+            bus=getattr(app.state, "bus", None),
+            macos=cfg.notify_macos,
+            clients=connected_clients,
+        )
+        await notifier.start()
+        app.state.devtask_notifier = notifier
         logger.info(
             "devtasks: %d project(s) registered%s",
             len(runner.registry.list()),
@@ -214,6 +266,9 @@ def setup_devtasks(app: Any) -> None:
 
     @app.on_event("shutdown")
     async def _stop_devtasks() -> None:
+        notifier = getattr(app.state, "devtask_notifier", None)
+        if notifier is not None:
+            await notifier.stop()
         scheduler = getattr(app.state, "devtask_routines", None)
         if scheduler is not None:
             await scheduler.stop()

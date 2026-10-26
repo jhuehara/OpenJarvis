@@ -114,6 +114,21 @@
 
   .toggle-chat { display: none; }
 
+  /* ---------- Avisos no celular (Telegram) ---------- */
+  .vp-tg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .vp-tg span { flex: 1; letter-spacing: .04em; }
+  .tg-modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.55); }
+  .tg-modal[hidden] { display: none; }
+  .tg-card { width: min(460px, calc(100vw - 32px)); background: rgba(7,10,16,.97); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .tg-card h3 { font-size: 15px; letter-spacing: .25em; text-transform: uppercase; color: var(--accent); }
+  .tg-card ol { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; line-height: 1.4; }
+  .tg-card a { color: var(--accent); }
+  .tg-card input { width: 100%; background: rgba(0,0,0,.4); border: 1px solid var(--line); border-radius: 9px; color: var(--text); padding: 9px 10px; font: 13px var(--mono); outline: none; }
+  .tg-code { font: 600 30px var(--mono); letter-spacing: .3em; color: var(--text); text-align: center; padding: 8px; border: 1px dashed var(--line); border-radius: 10px; }
+  .tg-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .tg-msg { font-size: 13.5px; color: var(--muted); min-height: 18px; }
+  .tg-msg.err { color: #ffb4a8; }
+
   /* ---------- Seletor de projeto (perguntas sobre código) ---------- */
   .ctx-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
   .ctx-bar select { background: rgba(0,0,0,.35); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; font: 500 13px var(--display); text-transform: none; letter-spacing: 0; }
@@ -392,6 +407,15 @@
 </div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<div class="tg-modal" id="tgModal" hidden role="dialog" aria-label="Avisos no celular">
+  <div class="tg-card">
+    <h3>Avisos no celular</h3>
+    <div id="tgBody"></div>
+    <div class="tg-msg" id="tgMsg"></div>
+    <div class="tg-row" id="tgActions"></div>
+  </div>
+</div>
+
 <section class="activity" id="activity" hidden aria-label="Atividades dos agentes">
   <div class="act-head">
     <h2>Atividades dos agentes</h2>
@@ -474,6 +498,7 @@
       <input type="range" id="vpRate" min="0.7" max="1.5" step="0.05" value="1.05">
     </label>
     <label class="vp-all"><input type="checkbox" id="vpAll"> mostrar vozes de outros idiomas</label>
+    <div class="vp-tg"><span id="tgStatus">Avisos no celular: …</span><button type="button" class="pill-btn" id="tgOpen">Configurar</button></div>
     <label class="vp-notices">Avisos falados dos agentes
       <select id="vpNotices">
         <option value="all">sempre</option>
@@ -2856,6 +2881,68 @@ const agents = {
   },
 };
 
+/* Configuração do Telegram (o token vai direto ao servidor, nunca ao chat) */
+const telegramSetup = {
+  modal: document.getElementById('tgModal'), state: null, timer: null,
+  async refresh() {
+    try { this.state = await agents.api('/v1/notify/status'); } catch { this.state = null; }
+    const tg = this.state?.telegram;
+    document.getElementById('tgStatus').textContent = !tg ? 'Avisos no celular: indisponível'
+      : tg.paired ? `Telegram: conectado a @${tg.bot}` : tg.configured ? 'Telegram: aguardando pareamento' : 'Avisos no celular: desligados';
+    document.getElementById('tgOpen').textContent = tg?.paired ? 'Gerenciar' : 'Configurar';
+    return tg;
+  },
+  async open() {
+    this.modal.hidden = false;
+    toggleVoicePanel(false);
+    await this.render();
+  },
+  close() { this.modal.hidden = true; clearInterval(this.timer); this.timer = null; },
+  msg(text, err = false) { const el = document.getElementById('tgMsg'); el.textContent = text; el.classList.toggle('err', err); },
+  async render() {
+    const tg = await this.refresh();
+    const body = document.getElementById('tgBody'), acts = document.getElementById('tgActions');
+    this.msg('');
+    clearInterval(this.timer); this.timer = null;
+    if (tg?.paired) {
+      body.innerHTML = `<p>Conectado ao bot <b>@${escapeHtml(tg.bot)}</b>. Você recebe no Telegram os avisos de tarefas concluídas, falhas e pedidos de aprovação — e pode aprovar por lá.</p>`;
+      acts.innerHTML = '<button class="pill-btn" data-a="test">Enviar teste</button><button class="pill-btn danger" data-a="off">Desconectar</button><button class="pill-btn primary" data-a="close">Fechar</button>';
+    } else if (tg?.configured) {
+      body.innerHTML = `<p>Envie este código para o seu bot <a href="https://t.me/${encodeURIComponent(tg.bot)}" target="_blank" rel="noopener">@${escapeHtml(tg.bot)}</a> no Telegram:</p><div class="tg-code">${escapeHtml(tg.pair_code || '——')}</div><p class="tg-msg">Aguardando a mensagem…</p>`;
+      acts.innerHTML = '<button class="pill-btn danger" data-a="off">Cancelar</button>';
+      this.timer = setInterval(async () => { const t = await this.refresh(); if (t?.paired) this.render(); }, 2000);
+    } else {
+      body.innerHTML = `<ol>
+        <li>No Telegram, abra o <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, envie <b>/newbot</b> e escolha um nome (ex.: Jarvis do Jonatan).</li>
+        <li>Ele responde com um <b>token</b>. Cole aqui — ele vai direto para o Jarvis no seu Mac:</li></ol>
+        <input id="tgToken" type="password" autocomplete="off" spellcheck="false" placeholder="123456789:AA…">`;
+      acts.innerHTML = '<button class="pill-btn" data-a="close">Agora não</button><button class="pill-btn primary" data-a="save">Conectar</button>';
+    }
+    acts.querySelectorAll('[data-a]').forEach(b => { b.onclick = () => this.act(b.dataset.a, b); });
+  },
+  async act(a, btn) {
+    if (a === 'close') return this.close();
+    btn.disabled = true;
+    try {
+      if (a === 'save') {
+        const token = document.getElementById('tgToken').value.trim();
+        if (!token) { this.msg('Cole o token do @BotFather.', true); btn.disabled = false; return; }
+        this.msg('Validando com o Telegram…');
+        await agents.api('/v1/notify/telegram', { method: 'POST', body: JSON.stringify({ token }) });
+      } else if (a === 'test') {
+        await agents.api('/v1/notify/telegram/test', { method: 'POST' });
+        this.msg('Mensagem de teste enviada.'); btn.disabled = false; return;
+      } else if (a === 'off') {
+        await agents.api('/v1/notify/telegram', { method: 'DELETE' });
+      }
+      await this.render();
+    } catch (err) { this.msg(err.message, true); btn.disabled = false; }
+  },
+};
+document.getElementById('tgOpen').onclick = () => telegramSetup.open();
+telegramSetup.modal.addEventListener('click', ev => { if (ev.target === telegramSetup.modal) telegramSetup.close(); });
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && !telegramSetup.modal.hidden) { ev.stopImmediatePropagation(); telegramSetup.close(); } }, true);
+
 /* Comandos que a página resolve sozinha, sem passar pelo modelo */
 async function localCommand(text) {
   const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -3097,6 +3184,7 @@ setState('thinking');
 satellites.init();
 agents.init();
 codeContext.load();
+telegramSetup.refresh();
 Promise.all([loadModel(), loadGraph(), loadPersona()]).then(() => {
   setState('idle');
   emitWave(1.5);
